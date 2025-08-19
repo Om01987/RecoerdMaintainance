@@ -1,9 +1,10 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.RecordMaintenance" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+<resources>
+    <style name="Theme.RecordMaintenance" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">#6750A4</item>
+        <item name="colorSecondary">#03DAC5</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
-
-    <style name="Theme.RecordMaintenance" parent="Base.Theme.RecordMaintenance" />
 </resources>
