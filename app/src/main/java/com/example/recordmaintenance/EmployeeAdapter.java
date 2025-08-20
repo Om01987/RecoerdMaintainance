@@ -19,6 +19,7 @@ public class EmployeeAdapter extends RecyclerView.Adapter<EmployeeAdapter.Employ
     public interface OnItemClickListener {
         void onEditClick(Employee employee, int position);
         void onDeleteClick(Employee employee, int position);
+        void onViewClick(Employee employee, int position); // New method for viewing details
     }
 
     public EmployeeAdapter(Context context, List<Employee> employeeList) {
@@ -42,12 +43,15 @@ public class EmployeeAdapter extends RecyclerView.Adapter<EmployeeAdapter.Employ
         Employee employee = employeeList.get(position);
 
         holder.tvEmpName.setText(employee.getEmpName());
-        holder.tvDesignation.setText(employee.getDesignation());
-        holder.tvDepartment.setText(employee.getDepartment());
+        holder.tvEmpId.setText(employee.getEmpId() != null ? employee.getEmpId() : "N/A");
+        holder.tvDesignation.setText(employee.getDesignation() != null ? employee.getDesignation() : "N/A");
+        holder.tvDepartment.setText(employee.getDepartment() != null ? employee.getDepartment() : "N/A");
         holder.tvSalary.setText("₹" + String.valueOf(employee.getSalary()));
         holder.tvCity.setText(employee.getCity() != null ? employee.getCity() : "N/A");
-        holder.tvJoinedDate.setText(employee.getJoinedDate());
+        holder.tvJoinedDate.setText(employee.getJoinedDate() != null ? employee.getJoinedDate() : "N/A");
+        holder.tvEmail.setText(employee.getEmpEmail() != null ? employee.getEmpEmail() : "N/A");
 
+        // Set click listeners
         holder.btnEdit.setOnClickListener(v -> {
             if (listener != null) {
                 listener.onEditClick(employee, position);
@@ -57,6 +61,19 @@ public class EmployeeAdapter extends RecyclerView.Adapter<EmployeeAdapter.Employ
         holder.btnDelete.setOnClickListener(v -> {
             if (listener != null) {
                 listener.onDeleteClick(employee, position);
+            }
+        });
+
+        holder.btnView.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onViewClick(employee, position);
+            }
+        });
+
+        // Add click listener to entire card for quick view
+        holder.itemView.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onViewClick(employee, position);
             }
         });
     }
@@ -72,19 +89,22 @@ public class EmployeeAdapter extends RecyclerView.Adapter<EmployeeAdapter.Employ
     }
 
     public static class EmployeeViewHolder extends RecyclerView.ViewHolder {
-        TextView tvEmpName, tvDesignation, tvDepartment, tvSalary, tvCity, tvJoinedDate;
-        ImageButton btnEdit, btnDelete;
+        TextView tvEmpName, tvEmpId, tvDesignation, tvDepartment, tvSalary, tvCity, tvJoinedDate, tvEmail;
+        ImageButton btnEdit, btnDelete, btnView;
 
         public EmployeeViewHolder(@NonNull View itemView) {
             super(itemView);
             tvEmpName = itemView.findViewById(R.id.tvEmpName);
+            tvEmpId = itemView.findViewById(R.id.tvEmpId);
             tvDesignation = itemView.findViewById(R.id.tvDesignation);
             tvDepartment = itemView.findViewById(R.id.tvDepartment);
             tvSalary = itemView.findViewById(R.id.tvSalary);
             tvCity = itemView.findViewById(R.id.tvCity);
             tvJoinedDate = itemView.findViewById(R.id.tvJoinedDate);
+            tvEmail = itemView.findViewById(R.id.tvEmail);
             btnEdit = itemView.findViewById(R.id.btnEdit);
             btnDelete = itemView.findViewById(R.id.btnDelete);
+            btnView = itemView.findViewById(R.id.btnView);
         }
     }
 }

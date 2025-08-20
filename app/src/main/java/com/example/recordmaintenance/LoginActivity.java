@@ -26,6 +26,7 @@ public class LoginActivity extends AppCompatActivity {
     private LinearProgressIndicator progress;
 
     private AuthRepository authRepository;
+    private EmployeeRepository employeeRepository;
 
     private enum Role { ADMIN, EMPLOYEE }
     private Role selectedRole = Role.ADMIN;
@@ -36,6 +37,8 @@ public class LoginActivity extends AppCompatActivity {
         setContentView(R.layout.activity_login);
 
         authRepository = new AuthRepository(this);
+        employeeRepository = new EmployeeRepository(this);
+        employeeRepository.open();
 
         initViews();
         setupToggle();
@@ -63,9 +66,15 @@ public class LoginActivity extends AppCompatActivity {
             if (checkedId == R.id.btnAdmin) {
                 selectedRole = Role.ADMIN;
                 tilEmail.setHint("Admin Email");
+                // Set admin defaults
+                etEmail.setText("admin@example.com");
+                etPassword.setText("Admin@123");
             } else if (checkedId == R.id.btnEmployee) {
                 selectedRole = Role.EMPLOYEE;
-                tilEmail.setHint("Employee Email");
+                tilEmail.setHint("Employee ID or Email");
+                // Clear for employee input
+                etEmail.setText("");
+                etPassword.setText("");
             }
         });
     }
@@ -82,7 +91,7 @@ public class LoginActivity extends AppCompatActivity {
         });
 
         findViewById(R.id.tvForgot).setOnClickListener(v ->
-                Toast.makeText(this, "Password reset coming soon.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Contact admin for password reset.", Toast.LENGTH_LONG).show()
         );
     }
 
@@ -94,41 +103,63 @@ public class LoginActivity extends AppCompatActivity {
     private void attemptLogin() {
         clearErrors();
 
-        String email = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
+        String emailOrId = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
         String password = etPassword.getText() != null ? etPassword.getText().toString() : "";
 
-        boolean valid = validate(email, password);
+        boolean valid = validate(emailOrId, password);
         if (!valid) return;
 
         showLoading(true);
 
         btnLogin.postDelayed(() -> {
-            boolean success;
             if (selectedRole == Role.ADMIN) {
-                success = authRepository.verifyAdmin(email, password);
-                if (success) {
-                    goToMain();
-                } else {
-                    tilPassword.setError("Invalid email or password");
-                    showLoading(false);
-                }
+                attemptAdminLogin(emailOrId, password);
             } else {
-                Toast.makeText(this, "Employee login will be implemented next.", Toast.LENGTH_LONG).show();
-                showLoading(false);
+                attemptEmployeeLogin(emailOrId, password);
             }
         }, 600);
     }
 
-    private boolean validate(String email, String password) {
+    private void attemptAdminLogin(String email, String password) {
+        boolean success = authRepository.verifyAdmin(email, password);
+        if (success) {
+            goToMain("admin", null);
+        } else {
+            tilPassword.setError("Invalid admin credentials");
+            showLoading(false);
+        }
+    }
+
+    private void attemptEmployeeLogin(String emailOrId, String password) {
+        Employee employee = employeeRepository.verifyEmployeeLogin(emailOrId, password);
+        if (employee != null) {
+            goToEmployeeProfile(employee);
+        } else {
+            tilPassword.setError("Invalid employee credentials");
+            showLoading(false);
+        }
+    }
+
+    private boolean validate(String emailOrId, String password) {
         boolean ok = true;
-        if (TextUtils.isEmpty(email) || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+
+        if (TextUtils.isEmpty(emailOrId)) {
+            if (selectedRole == Role.ADMIN) {
+                tilEmail.setError("Enter admin email");
+            } else {
+                tilEmail.setError("Enter employee ID or email");
+            }
+            ok = false;
+        } else if (selectedRole == Role.ADMIN && !Patterns.EMAIL_ADDRESS.matcher(emailOrId).matches()) {
             tilEmail.setError("Enter a valid email");
             ok = false;
         }
+
         if (TextUtils.isEmpty(password) || password.length() < 6) {
-            tilPassword.setError("Password must be at least 6 chars");
+            tilPassword.setError("Password must be at least 6 characters");
             ok = false;
         }
+
         return ok;
     }
 
@@ -145,11 +176,31 @@ public class LoginActivity extends AppCompatActivity {
         toggleRole.setEnabled(!loading);
     }
 
-    private void goToMain() {
+    private void goToMain(String role, String employeeId) {
         showLoading(false);
         Intent intent = new Intent(this, MainActivity.class);
-        intent.putExtra("role", "admin");
+        intent.putExtra("role", role);
+        if (employeeId != null) {
+            intent.putExtra("employeeId", employeeId);
+        }
         startActivity(intent);
         finish();
+    }
+
+    private void goToEmployeeProfile(Employee employee) {
+        showLoading(false);
+        Intent intent = new Intent(this, EmployeeProfileActivity.class);
+        intent.putExtra("employeeId", employee.getEmpId());
+        intent.putExtra("employeeName", employee.getEmpName());
+        startActivity(intent);
+        finish();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (employeeRepository != null) {
+            employeeRepository.close();
+        }
+        super.onDestroy();
     }
 }

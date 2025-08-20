@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="16dp">
@@ -10,69 +11,216 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Master Fields -->
-        <EditText android:id="@+id/etEmpID"
+        <!-- Employee ID Display (Auto-generated, non-editable) -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilEmpID"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Employee ID" />
+            android:hint="Employee ID (Auto-generated)"
+            app:boxBackgroundMode="outline">
 
-        <EditText android:id="@+id/etEmpName"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etEmpID"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:enabled="false"
+                android:text="Will be auto-generated" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Employee Name -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilEmpName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Employee Name" />
+            android:hint="Employee Name *"
+            app:boxBackgroundMode="outline">
 
-        <EditText android:id="@+id/etDesignation"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etEmpName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPersonName" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Email -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilEmail"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Designation" />
+            android:hint="Email Address *"
+            app:boxBackgroundMode="outline">
 
-        <EditText android:id="@+id/etDepartment"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etEmail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textEmailAddress" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Password Info (for admin view) -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cvPasswordInfo"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Department" />
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            app:cardCornerRadius="8dp"
+            app:cardBackgroundColor="#E3F2FD">
 
-        <EditText android:id="@+id/etJoinedDate"
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔐 Password Information"
+                    android:textStyle="bold"
+                    android:textColor="#1976D2" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Initial password will be auto-generated and shown after employee creation"
+                    android:textSize="12sp"
+                    android:textColor="#424242"
+                    android:layout_marginTop="4dp" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- Existing fields -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilDesignation"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Joined Date (YYYY-MM-DD)" />
+            android:hint="Designation"
+            app:boxBackgroundMode="outline">
 
-        <EditText android:id="@+id/etSalary"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etDesignation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilDepartment"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Department"
+            app:boxBackgroundMode="outline">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etDepartment"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilJoinedDate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Joined Date (YYYY-MM-DD)"
+            app:boxBackgroundMode="outline">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etJoinedDate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilSalary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="Salary"
-            android:inputType="numberDecimal" />
+            app:boxBackgroundMode="outline">
 
-        <!-- Detail Fields -->
-        <EditText android:id="@+id/etAddress1"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etSalary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="numberDecimal" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Address fields remain the same -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilAddress1"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Address Line 1" />
+            android:hint="Address Line 1"
+            app:boxBackgroundMode="outline">
 
-        <EditText android:id="@+id/etAddress2"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etAddress1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilAddress2"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Address Line 2" />
+            android:hint="Address Line 2"
+            app:boxBackgroundMode="outline">
 
-        <EditText android:id="@+id/etCity"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etAddress2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilCity"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="City" />
+            android:hint="City"
+            app:boxBackgroundMode="outline">
 
-        <EditText android:id="@+id/etState"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etCity"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilState"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="State" />
+            android:hint="State"
+            app:boxBackgroundMode="outline">
 
-        <EditText android:id="@+id/etCountry"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etState"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilCountry"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Country" />
+            android:hint="Country"
+            app:boxBackgroundMode="outline">
 
-        <Button android:id="@+id/btnSave"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etCountry"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Save Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSave"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Save"
-            android:layout_marginTop="16dp" />
+            android:text="Save Employee"
+            android:layout_marginTop="16dp"
+            app:cornerRadius="8dp"
+            app:backgroundTint="?attr/colorPrimary" />
 
     </LinearLayout>
 </ScrollView>
