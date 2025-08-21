@@ -6,6 +6,7 @@ import android.database.Cursor;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteConstraintException;
+import android.util.Log;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
@@ -13,6 +14,7 @@ import java.util.Map;
 
 public class EmployeeRepository {
 
+    private static final String TAG = "EmployeeRepository";
     private DatabaseHelper dbHelper;
     private SQLiteDatabase database;
     private EmployeeCodeGenerator codeGenerator;
@@ -56,6 +58,8 @@ public class EmployeeRepository {
             // Store plain password for admin viewing
             passwordMap.put(empCode, initialPassword);
 
+            Log.d(TAG, "Creating employee with ID: " + empCode + ", Password: " + initialPassword);
+
             // Insert Master
             ContentValues masterValues = new ContentValues();
             masterValues.put(DatabaseHelper.EMP_ID, employee.getEmpId());
@@ -89,14 +93,16 @@ public class EmployeeRepository {
             }
             return new InsertResult(false, -1, "", "", "Failed to insert employee");
         } catch (SQLiteConstraintException e) {
-            if (e.getMessage().contains("EmpEmail")) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            if (msg.contains("EmpEmail") || msg.contains("UNIQUE constraint failed: TblEmployeeMaster.EmpEmail")) {
                 return new InsertResult(false, -1, "", "", "Email address already exists");
-            } else if (e.getMessage().contains("EmpID")) {
+            } else if (msg.contains("EmpID") || msg.contains("UNIQUE constraint failed: TblEmployeeMaster.EmpID")) {
                 return new InsertResult(false, -1, "", "", "Employee ID already exists");
             } else {
-                return new InsertResult(false, -1, "", "", "Constraint violation: " + e.getMessage());
+                return new InsertResult(false, -1, "", "", "Constraint violation: " + msg);
             }
         } catch (Exception e) {
+            Log.e(TAG, "Error inserting employee", e);
             return new InsertResult(false, -1, "", "", "Error: " + e.getMessage());
         } finally {
             database.endTransaction();
@@ -104,34 +110,48 @@ public class EmployeeRepository {
     }
 
     /**
-     * Get employee password for admin viewing (returns plain text password)
+     * Get employee password for admin viewing (returns plain text password) - FIXED VERSION
      */
     public String getEmployeePassword(String empId) {
-        // Check if we have the plain password stored
+        Log.d(TAG, "Getting password for employee: " + empId);
+
+        // Check if we have the plain password stored in memory
         if (passwordMap.containsKey(empId)) {
-            return passwordMap.get(empId);
+            String password = passwordMap.get(empId);
+            Log.d(TAG, "Found password in memory for " + empId + ": " + password);
+            return password;
         }
 
-        // If not found, try to generate it for existing employees
+        // Check if employee exists and has a password set
         Employee emp = getEmployeeByEmpId(empId);
         if (emp != null) {
-            String generatedPassword = EmployeeCodeGenerator.generateInitialPassword(emp.getEmpName(), empId);
-            passwordMap.put(empId, generatedPassword);
+            Log.d(TAG, "Employee found: " + emp.getEmpName() + ", has password: " + (emp.getEmpPassword() != null && !emp.getEmpPassword().trim().isEmpty()));
 
-            // Update database with new hashed password if current is empty
-            if (emp.getEmpPassword() == null || emp.getEmpPassword().trim().isEmpty()) {
+            // If password exists but we don't have plain text, we can't retrieve it
+            if (emp.getEmpPassword() != null && !emp.getEmpPassword().trim().isEmpty()) {
+                // For existing employees with passwords, we can't retrieve the original plain text
+                return "Password set (not viewable - security)";
+            } else {
+                // Generate and set initial password for employee without one
+                String generatedPassword = EmployeeCodeGenerator.generateInitialPassword(emp.getEmpName(), empId);
                 String hashedPassword = EmployeeCodeGenerator.hashPassword(generatedPassword);
+
+                Log.d(TAG, "Generating new password for " + empId + ": " + generatedPassword);
+
+                // Update database
                 ContentValues values = new ContentValues();
                 values.put(DatabaseHelper.EMP_PASSWORD, hashedPassword);
                 values.put(DatabaseHelper.PASSWORD_CHANGED, 0);
                 database.update(DatabaseHelper.TABLE_MASTER, values,
                         DatabaseHelper.EMP_ID + " = ?", new String[]{empId});
-            }
 
-            return generatedPassword;
+                // Store for admin viewing
+                passwordMap.put(empId, generatedPassword);
+                return generatedPassword;
+            }
         }
 
-        return "Password not available";
+        return "Employee not found";
     }
 
     /**
@@ -191,10 +211,13 @@ public class EmployeeRepository {
     }
 
     /**
-     * Verify employee login with email or employee ID (enhanced)
+     * Verify employee login with email or employee ID - ENHANCED WITH DEBUGGING
      */
     public Employee verifyEmployeeLogin(String emailOrId, String password) {
+        Log.d(TAG, "Attempting login for: " + emailOrId);
+
         String hashedPassword = EmployeeCodeGenerator.hashPassword(password);
+        Log.d(TAG, "Hashed password: " + hashedPassword.substring(0, 10) + "...");
 
         String query = "SELECT m.*, d.* FROM " + DatabaseHelper.TABLE_MASTER + " m " +
                 "LEFT JOIN " + DatabaseHelper.TABLE_DETAIL + " d " +
@@ -205,11 +228,15 @@ public class EmployeeRepository {
         Cursor cursor = database.rawQuery(query, new String[]{emailOrId, emailOrId, hashedPassword});
         Employee employee = null;
 
+        Log.d(TAG, "Login query returned " + cursor.getCount() + " results");
+
         if (cursor.moveToFirst()) {
             employee = new Employee();
             employee.setMastCode(cursor.getInt(cursor.getColumnIndexOrThrow(DatabaseHelper.MAST_CODE)));
             employee.setEmpId(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.EMP_ID)));
             employee.setEmpName(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.EMP_NAME)));
+
+            Log.d(TAG, "Login successful for: " + employee.getEmpName() + " (ID: " + employee.getEmpId() + ")");
 
             // Handle email safely
             int emailIndex = cursor.getColumnIndex(DatabaseHelper.EMP_EMAIL);
@@ -237,6 +264,8 @@ public class EmployeeRepository {
                 employee.setState(cursor.getString(cursor.getColumnIndex(DatabaseHelper.STATE)));
                 employee.setCountry(cursor.getString(cursor.getColumnIndex(DatabaseHelper.COUNTRY)));
             }
+        } else {
+            Log.d(TAG, "Login failed for: " + emailOrId);
         }
 
         cursor.close();
@@ -287,14 +316,17 @@ public class EmployeeRepository {
     }
 
     /**
-     * Migrate existing employees without passwords
+     * Migrate existing employees without passwords - FIXED VERSION
      */
     private void migrateExistingEmployeePasswords() {
+        Log.d(TAG, "Starting password migration...");
+
         String query = "SELECT " + DatabaseHelper.MAST_CODE + ", " + DatabaseHelper.EMP_ID + ", " +
                 DatabaseHelper.EMP_NAME + ", " + DatabaseHelper.EMP_PASSWORD +
                 " FROM " + DatabaseHelper.TABLE_MASTER;
 
         Cursor cursor = database.rawQuery(query, null);
+        int migrated = 0;
 
         if (cursor.moveToFirst()) {
             do {
@@ -302,16 +334,16 @@ public class EmployeeRepository {
                 String empName = cursor.getString(2);
                 String existingPassword = cursor.getString(3);
 
-                // Generate password for employees without one or store existing ones
+                // Only generate password if none exists or is empty
                 if (existingPassword == null || existingPassword.trim().isEmpty()) {
-                    // Generate password for existing employee
+                    // Generate password for existing employee without one
                     String plainPassword = EmployeeCodeGenerator.generateInitialPassword(empName, empId);
                     String hashedPassword = EmployeeCodeGenerator.hashPassword(plainPassword);
 
                     // Store plain password for admin viewing
                     passwordMap.put(empId, plainPassword);
 
-                    // Update database
+                    // Update database with hashed password
                     ContentValues values = new ContentValues();
                     values.put(DatabaseHelper.EMP_PASSWORD, hashedPassword);
                     values.put(DatabaseHelper.PASSWORD_CHANGED, 0); // Mark as initial password
@@ -319,16 +351,17 @@ public class EmployeeRepository {
                     database.update(DatabaseHelper.TABLE_MASTER, values,
                             DatabaseHelper.MAST_CODE + " = ?",
                             new String[]{String.valueOf(cursor.getInt(0))});
-                } else {
-                    // For employees with existing passwords, generate a plain password for admin viewing
-                    String plainPassword = EmployeeCodeGenerator.generateInitialPassword(empName, empId);
-                    passwordMap.put(empId, plainPassword);
+
+                    migrated++;
+                    Log.d(TAG, "Generated password for existing employee: " + empId + " -> " + plainPassword);
                 }
+                // Do NOT generate new passwords for employees who already have them
 
             } while (cursor.moveToNext());
         }
 
         cursor.close();
+        Log.d(TAG, "Migration completed. Updated " + migrated + " employees with new passwords.");
     }
 
     /**
