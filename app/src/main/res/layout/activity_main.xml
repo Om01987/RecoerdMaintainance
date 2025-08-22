@@ -211,6 +211,26 @@
 
             </LinearLayout>
 
+            <!-- Filter Status (NEW - Shows when filters are applied) -->
+            <TextView
+                android:id="@+id/tvFilterStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
+                android:text="Showing 5 of 10 employees"
+                android:textSize="14sp"
+                android:textColor="?attr/colorPrimary"
+                android:textStyle="bold"
+                android:background="@drawable/filter_status_background"
+                android:padding="12dp"
+                android:drawableStart="@android:drawable/ic_menu_search"
+                android:drawablePadding="8dp"
+                android:drawableTint="?attr/colorPrimary"
+                android:visibility="gone"
+                android:gravity="center_vertical" />
+
             <!-- Employee List Card -->
             <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"

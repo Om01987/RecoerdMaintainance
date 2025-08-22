@@ -110,27 +110,44 @@ public class EmployeeRepository {
     }
 
     /**
-     * Get employee password for admin viewing (returns plain text password) - FIXED VERSION
+     * Get employee password for admin viewing (returns plain text password) - ADMIN ENHANCED VERSION
      */
     public String getEmployeePassword(String empId) {
         Log.d(TAG, "Getting password for employee: " + empId);
 
-        // Check if we have the plain password stored in memory
+        // Check if we have the plain password stored in memory first
         if (passwordMap.containsKey(empId)) {
             String password = passwordMap.get(empId);
             Log.d(TAG, "Found password in memory for " + empId + ": " + password);
             return password;
         }
 
-        // Check if employee exists and has a password set
+        // Check if employee exists
         Employee emp = getEmployeeByEmpId(empId);
         if (emp != null) {
             Log.d(TAG, "Employee found: " + emp.getEmpName() + ", has password: " + (emp.getEmpPassword() != null && !emp.getEmpPassword().trim().isEmpty()));
 
-            // If password exists but we don't have plain text, we can't retrieve it
+            // For admin viewing, try to regenerate the initial password pattern
+            // This works for employees who haven't changed their password
             if (emp.getEmpPassword() != null && !emp.getEmpPassword().trim().isEmpty()) {
-                // For existing employees with passwords, we can't retrieve the original plain text
-                return "Password set (not viewable - security)";
+
+                // If password hasn't been changed, regenerate the initial password
+                if (!emp.isPasswordChanged()) {
+                    String generatedPassword = EmployeeCodeGenerator.generateInitialPassword(emp.getEmpName(), empId);
+                    String generatedHash = EmployeeCodeGenerator.hashPassword(generatedPassword);
+
+                    // Verify if this matches the stored hash
+                    if (generatedHash.equals(emp.getEmpPassword())) {
+                        // Store for future quick access
+                        passwordMap.put(empId, generatedPassword);
+                        Log.d(TAG, "Regenerated initial password for " + empId + ": " + generatedPassword);
+                        return generatedPassword;
+                    }
+                }
+
+                // If password was changed, we can't retrieve the plain text
+                // But for admin functionality, we'll provide a way to reset it
+                return "PASSWORD_CHANGED_BY_EMPLOYEE";
             } else {
                 // Generate and set initial password for employee without one
                 String generatedPassword = EmployeeCodeGenerator.generateInitialPassword(emp.getEmpName(), empId);
@@ -151,7 +168,47 @@ public class EmployeeRepository {
             }
         }
 
-        return "Employee not found";
+        return "EMPLOYEE_NOT_FOUND";
+    }
+
+    /**
+     * Admin function to reset employee password to a new generated one
+     */
+    public String resetEmployeePassword(String empId) {
+        Employee emp = getEmployeeByEmpId(empId);
+        if (emp != null) {
+            // Generate new password
+            String newPassword = EmployeeCodeGenerator.generateInitialPassword(emp.getEmpName(), empId);
+            String hashedPassword = EmployeeCodeGenerator.hashPassword(newPassword);
+
+            // Update database
+            ContentValues values = new ContentValues();
+            values.put(DatabaseHelper.EMP_PASSWORD, hashedPassword);
+            values.put(DatabaseHelper.PASSWORD_CHANGED, 0); // Mark as initial password again
+
+            int result = database.update(DatabaseHelper.TABLE_MASTER, values,
+                    DatabaseHelper.EMP_ID + " = ?", new String[]{empId});
+
+            if (result > 0) {
+                // Store for admin viewing
+                passwordMap.put(empId, newPassword);
+                Log.d(TAG, "Reset password for " + empId + ": " + newPassword);
+                return newPassword;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Check if employee password can be viewed by admin
+     */
+    public boolean canViewPassword(String empId) {
+        Employee emp = getEmployeeByEmpId(empId);
+        if (emp != null) {
+            // Can view if password is in memory map or if it's an unchanged initial password
+            return passwordMap.containsKey(empId) || !emp.isPasswordChanged();
+        }
+        return false;
     }
 
     /**
@@ -307,8 +364,9 @@ public class EmployeeRepository {
                 DatabaseHelper.EMP_ID + " = ?", new String[]{empId});
 
         if (result > 0) {
-            // Update plain password storage for admin viewing
-            passwordMap.put(empId, newPassword);
+            // Remove from password map since it's now user-defined
+            passwordMap.remove(empId);
+            Log.d(TAG, "Password changed for employee: " + empId);
             return true;
         }
 
@@ -354,14 +412,48 @@ public class EmployeeRepository {
 
                     migrated++;
                     Log.d(TAG, "Generated password for existing employee: " + empId + " -> " + plainPassword);
+                } else {
+                    // For existing employees with passwords, try to determine if it's an initial password
+                    String potentialInitialPassword = EmployeeCodeGenerator.generateInitialPassword(empName, empId);
+                    String potentialHash = EmployeeCodeGenerator.hashPassword(potentialInitialPassword);
+
+                    if (potentialHash.equals(existingPassword)) {
+                        // This is an initial password, store for admin viewing
+                        passwordMap.put(empId, potentialInitialPassword);
+                        Log.d(TAG, "Recovered initial password for existing employee: " + empId);
+                    }
                 }
-                // Do NOT generate new passwords for employees who already have them
 
             } while (cursor.moveToNext());
         }
 
         cursor.close();
         Log.d(TAG, "Migration completed. Updated " + migrated + " employees with new passwords.");
+    }
+
+    /**
+     * Get password statistics for admin dashboard
+     */
+    public PasswordStatistics getPasswordStatistics() {
+        String query = "SELECT " +
+                "COUNT(*) as total, " +
+                "SUM(CASE WHEN " + DatabaseHelper.PASSWORD_CHANGED + " = 0 THEN 1 ELSE 0 END) as initial, " +
+                "SUM(CASE WHEN " + DatabaseHelper.PASSWORD_CHANGED + " = 1 THEN 1 ELSE 0 END) as changed " +
+                "FROM " + DatabaseHelper.TABLE_MASTER +
+                " WHERE " + DatabaseHelper.EMP_PASSWORD + " IS NOT NULL AND " + DatabaseHelper.EMP_PASSWORD + " != ''";
+
+        Cursor cursor = database.rawQuery(query, null);
+        PasswordStatistics stats = new PasswordStatistics();
+
+        if (cursor.moveToFirst()) {
+            stats.totalEmployees = cursor.getInt(0);
+            stats.initialPasswords = cursor.getInt(1);
+            stats.changedPasswords = cursor.getInt(2);
+            stats.viewablePasswords = passwordMap.size();
+        }
+
+        cursor.close();
+        return stats;
     }
 
     /**
@@ -563,5 +655,12 @@ public class EmployeeRepository {
 
         public boolean isValid() { return valid; }
         public List<String> getErrors() { return errors; }
+    }
+
+    public static class PasswordStatistics {
+        public int totalEmployees = 0;
+        public int initialPasswords = 0;
+        public int changedPasswords = 0;
+        public int viewablePasswords = 0;
     }
 }
