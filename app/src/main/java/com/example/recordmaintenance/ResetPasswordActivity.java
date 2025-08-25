@@ -25,25 +25,38 @@ public class ResetPasswordActivity extends AppCompatActivity {
     private LinearProgressIndicator progress;
 
     private AuthRepository authRepository;
+    private EmployeeRepository employeeRepository;
+
+    private String userType;
     private String userEmail;
+    private String empId;
+    private String empName;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_reset_password);
 
+        // Get intent data
+        userType = getIntent().getStringExtra("userType");
         userEmail = getIntent().getStringExtra("email");
-        if (userEmail == null) {
+        empId = getIntent().getStringExtra("empId");
+        empName = getIntent().getStringExtra("empName");
+
+        if (userType == null) {
             Toast.makeText(this, "Invalid reset request", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
         authRepository = new AuthRepository(this);
+        employeeRepository = new EmployeeRepository(this);
+        employeeRepository.open();
 
         initializeViews();
         setupToolbar();
         setupClickListeners();
+        updateUIForUserType();
     }
 
     private void initializeViews() {
@@ -59,8 +72,19 @@ public class ResetPasswordActivity extends AppCompatActivity {
     private void setupToolbar() {
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("Reset Password");
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        }
+    }
+
+    private void updateUIForUserType() {
+        if ("admin".equals(userType)) {
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setTitle("Reset Admin Password");
+            }
+        } else if ("employee".equals(userType)) {
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setTitle("Reset Employee Password");
+            }
         }
     }
 
@@ -82,7 +106,13 @@ public class ResetPasswordActivity extends AppCompatActivity {
 
         // Simulate network delay
         btnUpdatePassword.postDelayed(() -> {
-            boolean success = authRepository.updateAdminPassword(userEmail, newPassword);
+            boolean success = false;
+
+            if ("admin".equals(userType)) {
+                success = authRepository.updateAdminPassword(userEmail, newPassword);
+            } else if ("employee".equals(userType)) {
+                success = employeeRepository.changeEmployeePassword(empId, newPassword);
+            }
 
             if (success) {
                 showSuccessDialog();
@@ -150,9 +180,17 @@ public class ResetPasswordActivity extends AppCompatActivity {
     private void showSuccessDialog() {
         showLoading(false);
 
-        String message = "✅ Password Updated Successfully!\n\n" +
-                "Your admin password has been updated securely.\n" +
-                "You can now login with your new password.";
+        String message;
+        if ("admin".equals(userType)) {
+            message = "✅ Admin Password Updated Successfully!\n\n" +
+                    "Your admin password has been updated securely.\n" +
+                    "You can now login with your new password.";
+        } else {
+            message = "✅ Employee Password Updated Successfully!\n\n" +
+                    "Hello " + (empName != null ? empName : "Employee") + "!\n\n" +
+                    "Your password has been updated securely.\n" +
+                    "You can now login with your new password.";
+        }
 
         new AlertDialog.Builder(this)
                 .setTitle("Password Reset Complete")
@@ -181,6 +219,9 @@ public class ResetPasswordActivity extends AppCompatActivity {
     protected void onDestroy() {
         if (authRepository != null) {
             authRepository.close();
+        }
+        if (employeeRepository != null) {
+            employeeRepository.close();
         }
         super.onDestroy();
     }

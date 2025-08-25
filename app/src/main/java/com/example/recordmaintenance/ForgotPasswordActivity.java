@@ -13,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -20,12 +21,25 @@ import com.google.android.material.textfield.TextInputLayout;
 public class ForgotPasswordActivity extends AppCompatActivity {
 
     private MaterialToolbar toolbar;
-    private TextInputLayout tilEmail;
-    private TextInputEditText etEmail;
-    private MaterialButton btnResetPassword;
+    private MaterialButtonToggleGroup toggleUserType;
+    private MaterialButton btnAdmin, btnEmployee;
+
+    // Admin fields
+    private TextInputLayout tilAdminEmail;
+    private TextInputEditText etAdminEmail;
+
+    // Employee fields
+    private TextInputLayout tilEmpId, tilEmpEmail, tilJoinedDate;
+    private TextInputEditText etEmpId, etEmpEmail, etJoinedDate;
+
+    private MaterialButton btnVerify;
     private LinearProgressIndicator progress;
 
     private AuthRepository authRepository;
+    private EmployeeRepository employeeRepository;
+
+    private enum UserType { ADMIN, EMPLOYEE }
+    private UserType selectedUserType = UserType.ADMIN;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,18 +47,37 @@ public class ForgotPasswordActivity extends AppCompatActivity {
         setContentView(R.layout.activity_forgot_password);
 
         authRepository = new AuthRepository(this);
+        employeeRepository = new EmployeeRepository(this);
+        employeeRepository.open();
 
         initializeViews();
         setupToolbar();
+        setupToggle();
         setupClickListeners();
     }
 
     private void initializeViews() {
         toolbar = findViewById(R.id.toolbar);
-        tilEmail = findViewById(R.id.tilEmail);
-        etEmail = findViewById(R.id.etEmail);
-        btnResetPassword = findViewById(R.id.btnResetPassword);
+        toggleUserType = findViewById(R.id.toggleUserType);
+        btnAdmin = findViewById(R.id.btnAdmin);
+        btnEmployee = findViewById(R.id.btnEmployee);
+
+        // Admin fields
+        tilAdminEmail = findViewById(R.id.tilAdminEmail);
+        etAdminEmail = findViewById(R.id.etAdminEmail);
+
+        // Employee fields
+        tilEmpId = findViewById(R.id.tilEmpId);
+        tilEmpEmail = findViewById(R.id.tilEmpEmail);
+        tilJoinedDate = findViewById(R.id.tilJoinedDate);
+        etEmpId = findViewById(R.id.etEmpId);
+        etEmpEmail = findViewById(R.id.etEmpEmail);
+        etJoinedDate = findViewById(R.id.etJoinedDate);
+
+        btnVerify = findViewById(R.id.btnVerify);
         progress = findViewById(R.id.progress);
+
+        toggleUserType.check(R.id.btnAdmin);
     }
 
     private void setupToolbar() {
@@ -55,64 +88,190 @@ public class ForgotPasswordActivity extends AppCompatActivity {
         }
     }
 
-    private void setupClickListeners() {
-        btnResetPassword.setOnClickListener(v -> attemptPasswordReset());
-
-        findViewById(R.id.tvBackToLogin).setOnClickListener(v -> {
-            finish();
+    private void setupToggle() {
+        toggleUserType.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (!isChecked) return;
+            if (checkedId == R.id.btnAdmin) {
+                selectedUserType = UserType.ADMIN;
+                showAdminFields();
+            } else if (checkedId == R.id.btnEmployee) {
+                selectedUserType = UserType.EMPLOYEE;
+                showEmployeeFields();
+            }
         });
+
+        // Initialize with admin fields visible
+        showAdminFields();
     }
 
-    private void attemptPasswordReset() {
+    private void showAdminFields() {
+        // Show admin fields
+        tilAdminEmail.setVisibility(View.VISIBLE);
+
+        // Hide employee fields
+        tilEmpId.setVisibility(View.GONE);
+        tilEmpEmail.setVisibility(View.GONE);
+        tilJoinedDate.setVisibility(View.GONE);
+
+        btnVerify.setText("Send Reset Instructions");
+        clearAllFields();
+    }
+
+    private void showEmployeeFields() {
+        // Hide admin fields
+        tilAdminEmail.setVisibility(View.GONE);
+
+        // Show employee fields
+        tilEmpId.setVisibility(View.VISIBLE);
+        tilEmpEmail.setVisibility(View.VISIBLE);
+        tilJoinedDate.setVisibility(View.VISIBLE);
+
+        btnVerify.setText("Verify Employee Details");
+        clearAllFields();
+    }
+
+    private void clearAllFields() {
+        etAdminEmail.setText("");
+        etEmpId.setText("");
+        etEmpEmail.setText("");
+        etJoinedDate.setText("");
+        clearErrors();
+    }
+
+    private void setupClickListeners() {
+        btnVerify.setOnClickListener(v -> {
+            if (selectedUserType == UserType.ADMIN) {
+                attemptAdminPasswordReset();
+            } else {
+                attemptEmployeeVerification();
+            }
+        });
+
+        findViewById(R.id.tvBackToLogin).setOnClickListener(v -> finish());
+    }
+
+    private void attemptAdminPasswordReset() {
         clearErrors();
 
-        String email = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
+        String email = etAdminEmail.getText() != null ? etAdminEmail.getText().toString().trim() : "";
 
-        if (!validateEmail(email)) {
+        if (!validateAdminEmail(email)) {
             return;
         }
 
         showLoading(true);
 
         // Simulate network delay
-        btnResetPassword.postDelayed(() -> {
-            // Check if admin exists
+        btnVerify.postDelayed(() -> {
             boolean adminExists = authRepository.adminExists(email);
 
             if (adminExists) {
-                showResetSuccessDialog(email);
+                showAdminResetSuccessDialog(email);
             } else {
-                tilEmail.setError("No account found with this email address");
+                tilAdminEmail.setError("No admin account found with this email address");
                 showLoading(false);
             }
         }, 1000);
     }
 
-    private boolean validateEmail(String email) {
+    private void attemptEmployeeVerification() {
+        clearErrors();
+
+        String empId = etEmpId.getText() != null ? etEmpId.getText().toString().trim() : "";
+        String empEmail = etEmpEmail.getText() != null ? etEmpEmail.getText().toString().trim() : "";
+        String joinedDate = etJoinedDate.getText() != null ? etJoinedDate.getText().toString().trim() : "";
+
+        if (!validateEmployeeFields(empId, empEmail, joinedDate)) {
+            return;
+        }
+
+        showLoading(true);
+
+        // Simulate network delay
+        btnVerify.postDelayed(() -> {
+            Employee employee = verifyEmployeeDetails(empId, empEmail, joinedDate);
+
+            if (employee != null) {
+                showEmployeeResetSuccessDialog(employee);
+            } else {
+                Toast.makeText(this, "Employee verification failed. Please check your details.", Toast.LENGTH_LONG).show();
+                showLoading(false);
+            }
+        }, 1000);
+    }
+
+    private boolean validateAdminEmail(String email) {
         if (TextUtils.isEmpty(email)) {
-            tilEmail.setError("Email is required");
+            tilAdminEmail.setError("Admin email is required");
             return false;
         }
 
         if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            tilEmail.setError("Please enter a valid email address");
+            tilAdminEmail.setError("Please enter a valid email address");
             return false;
         }
 
         return true;
     }
 
+    private boolean validateEmployeeFields(String empId, String empEmail, String joinedDate) {
+        boolean valid = true;
+
+        if (TextUtils.isEmpty(empId)) {
+            tilEmpId.setError("Employee ID is required");
+            valid = false;
+        }
+
+        if (TextUtils.isEmpty(empEmail)) {
+            tilEmpEmail.setError("Email is required");
+            valid = false;
+        } else if (!Patterns.EMAIL_ADDRESS.matcher(empEmail).matches()) {
+            tilEmpEmail.setError("Please enter a valid email address");
+            valid = false;
+        }
+
+        if (TextUtils.isEmpty(joinedDate)) {
+            tilJoinedDate.setError("Joined date is required (DD/MM/YYYY format)");
+            valid = false;
+        }
+
+        return valid;
+    }
+
+    private Employee verifyEmployeeDetails(String empId, String empEmail, String joinedDate) {
+        Employee employee = employeeRepository.getEmployeeByEmpId(empId);
+
+        if (employee != null) {
+            // Verify email and joined date match
+            boolean emailMatches = empEmail.equalsIgnoreCase(employee.getEmpEmail());
+            boolean dateMatches = joinedDate.equals(employee.getJoinedDate());
+
+            if (emailMatches && dateMatches) {
+                return employee;
+            }
+        }
+
+        return null;
+    }
+
     private void clearErrors() {
-        tilEmail.setError(null);
+        tilAdminEmail.setError(null);
+        tilEmpId.setError(null);
+        tilEmpEmail.setError(null);
+        tilJoinedDate.setError(null);
     }
 
     private void showLoading(boolean loading) {
         progress.setVisibility(loading ? View.VISIBLE : View.GONE);
-        btnResetPassword.setEnabled(!loading);
-        etEmail.setEnabled(!loading);
+        btnVerify.setEnabled(!loading);
+        etAdminEmail.setEnabled(!loading);
+        etEmpId.setEnabled(!loading);
+        etEmpEmail.setEnabled(!loading);
+        etJoinedDate.setEnabled(!loading);
+        toggleUserType.setEnabled(!loading);
     }
 
-    private void showResetSuccessDialog(String email) {
+    private void showAdminResetSuccessDialog(String email) {
         showLoading(false);
 
         String message = "Password reset instructions have been sent to:\n\n" + email +
@@ -123,13 +282,36 @@ public class ForgotPasswordActivity extends AppCompatActivity {
                 .setMessage(message)
                 .setPositiveButton("Reset Password", (dialog, which) -> {
                     Intent intent = new Intent(this, ResetPasswordActivity.class);
+                    intent.putExtra("userType", "admin");
                     intent.putExtra("email", email);
                     startActivity(intent);
                     finish();
                 })
-                .setNegativeButton("Back to Login", (dialog, which) -> {
+                .setNegativeButton("Back to Login", (dialog, which) -> finish())
+                .setCancelable(false)
+                .show();
+    }
+
+    private void showEmployeeResetSuccessDialog(Employee employee) {
+        showLoading(false);
+
+        String message = "✅ Employee Verified Successfully!\n\n" +
+                "Employee: " + employee.getEmpName() + "\n" +
+                "ID: " + employee.getEmpId() + "\n\n" +
+                "You can now reset your password.";
+
+        new AlertDialog.Builder(this)
+                .setTitle("Verification Successful")
+                .setMessage(message)
+                .setPositiveButton("Reset Password", (dialog, which) -> {
+                    Intent intent = new Intent(this, ResetPasswordActivity.class);
+                    intent.putExtra("userType", "employee");
+                    intent.putExtra("empId", employee.getEmpId());
+                    intent.putExtra("empName", employee.getEmpName());
+                    startActivity(intent);
                     finish();
                 })
+                .setNegativeButton("Back to Login", (dialog, which) -> finish())
                 .setCancelable(false)
                 .show();
     }
@@ -147,6 +329,9 @@ public class ForgotPasswordActivity extends AppCompatActivity {
     protected void onDestroy() {
         if (authRepository != null) {
             authRepository.close();
+        }
+        if (employeeRepository != null) {
+            employeeRepository.close();
         }
         super.onDestroy();
     }
