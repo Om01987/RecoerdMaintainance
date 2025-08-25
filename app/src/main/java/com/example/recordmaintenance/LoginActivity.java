@@ -90,9 +90,11 @@ public class LoginActivity extends AppCompatActivity {
             return false;
         });
 
-        findViewById(R.id.tvForgot).setOnClickListener(v ->
-                Toast.makeText(this, "Contact admin for password reset.", Toast.LENGTH_LONG).show()
-        );
+        // Updated to navigate to ForgotPasswordActivity
+        findViewById(R.id.tvForgot).setOnClickListener(v -> {
+            Intent intent = new Intent(this, ForgotPasswordActivity.class);
+            startActivity(intent);
+        });
     }
 
     private void presetDemo() {
@@ -200,6 +202,9 @@ public class LoginActivity extends AppCompatActivity {
     protected void onDestroy() {
         if (employeeRepository != null) {
             employeeRepository.close();
+        }
+        if (authRepository != null) {
+            authRepository.close();
         }
         super.onDestroy();
     }
