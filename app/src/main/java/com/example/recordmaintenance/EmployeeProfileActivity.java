@@ -1,22 +1,39 @@
 package com.example.recordmaintenance;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.net.Uri;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
+
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
 import de.hdodenhof.circleimageview.CircleImageView;
 
 public class EmployeeProfileActivity extends AppCompatActivity {
+
+    private OpenAction pendingAction;
     private static final int REQUEST_CHANGE_PASSWORD = 200;
     private static final int REQ_PICK_IMAGE = 501;
     private static final int REQ_CAPTURE_IMAGE = 502;
+    private static final int REQ_PERMS = 1000;
 
     // UI Components
     private MaterialToolbar toolbar;
@@ -28,8 +45,8 @@ public class EmployeeProfileActivity extends AppCompatActivity {
 
     // Profile photo
     private CircleImageView ivProfilePhoto;
-    private android.view.View ivEditOverlay;
-    private android.net.Uri pendingCameraUri = null;
+    private View ivEditOverlay;
+    private Uri pendingCameraUri = null;
 
     // Data Components
     private EmployeeRepository repository;
@@ -133,7 +150,7 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         String photoPath = currentEmployee.getProfilePhotoPath();
         if (photoPath != null && !photoPath.trim().isEmpty() && ImageUtils.isPhotoExists(photoPath)) {
             com.squareup.picasso.Picasso.get()
-                    .load(new java.io.File(photoPath))
+                    .load(new File(photoPath))
                     .placeholder(R.drawable.ic_person_placeholder)
                     .into(ivProfilePhoto);
         } else {
@@ -149,35 +166,103 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         });
 
         // Profile photo change logic
-        android.view.View.OnClickListener openPhotoMenu = v -> {
+        View.OnClickListener openPhotoMenu = v -> {
             boolean hasPhoto = currentEmployee.getProfilePhotoPath() != null
                     && !currentEmployee.getProfilePhotoPath().trim().isEmpty()
                     && ImageUtils.isPhotoExists(currentEmployee.getProfilePhotoPath());
+
             PhotoSelectionDialogFragment dlg = PhotoSelectionDialogFragment.newInstance(hasPhoto);
             dlg.setPhotoSelectionListener(new PhotoSelectionDialogFragment.PhotoSelectionListener() {
-                @Override public void onTakePhotoSelected() { openCamera(); }
-                @Override public void onChooseFromGallerySelected() { openGallery(); }
-                @Override public void onViewFullImageSelected() { showFullImage(); }
-                @Override public void onRemovePhotoSelected() { removePhoto(); }
+                @Override
+                public void onTakePhotoSelected() {
+                    ensurePermissionsThen(EmployeeProfileActivity.this::openCamera);
+                }
+
+                @Override
+                public void onChooseFromGallerySelected() {
+                    ensurePermissionsThen(EmployeeProfileActivity.this::openGallery);
+                }
+
+                @Override
+                public void onViewFullImageSelected() {
+                    showFullImage();
+                }
+
+                @Override
+                public void onRemovePhotoSelected() {
+                    removePhoto();
+                }
             });
             dlg.show(getSupportFragmentManager(), "PHOTO_MENU");
         };
+
         ivProfilePhoto.setOnClickListener(openPhotoMenu);
         if (ivEditOverlay != null) ivEditOverlay.setOnClickListener(openPhotoMenu);
     }
 
+    private void ensurePermissionsThen(OpenAction action) {
+        List<String> perms = new ArrayList<>();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            perms.add(Manifest.permission.CAMERA);
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
+                    != PackageManager.PERMISSION_GRANTED) {
+                perms.add(Manifest.permission.READ_MEDIA_IMAGES);
+            }
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                perms.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+            }
+        }
+        if (perms.isEmpty()) {
+            action.run();
+        } else {
+            ActivityCompat.requestPermissions(this,
+                    perms.toArray(new String[0]), REQ_PERMS);
+            pendingAction = action;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_PERMS) {
+            boolean allGranted = true;
+            for (int r : grantResults) {
+                if (r != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false;
+                    break;
+                }
+            }
+            if (allGranted && pendingAction != null) {
+                pendingAction.run();
+            } else {
+                Toast.makeText(this, "Permissions required to access camera/gallery", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private interface OpenAction {
+        void run();
+    }
+
     private void openGallery() {
-        Intent intent = new Intent(Intent.ACTION_PICK);
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("image/*");
-        startActivityForResult(Intent.createChooser(intent, "Select Picture"), REQ_PICK_IMAGE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(intent, REQ_PICK_IMAGE);
     }
 
     private void openCamera() {
         try {
-            java.io.File dir = ImageUtils.getProfilePhotosDirectory(this);
+            File dir = ImageUtils.getProfilePhotosDirectory(this);
             String fileName = ImageUtils.generatePhotoFileName(employeeId);
-            java.io.File out = new java.io.File(dir, fileName);
-            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+            File out = new File(dir, fileName);
+            Uri uri = androidx.core.content.FileProvider.getUriForFile(
                     this, getPackageName() + ".provider", out);
             pendingCameraUri = uri;
 
@@ -207,12 +292,12 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         }
     }
 
-    private void handleSelectedImage(android.net.Uri uri) {
+    private void handleSelectedImage(Uri uri) {
         // Save copy to internal storage and persist path
         String savedPath = ImageUtils.saveImageToInternalStorage(this, uri, employeeId);
         if (savedPath != null && repository.updateEmployeeProfilePhoto(employeeId, savedPath)) {
             currentEmployee.setProfilePhotoPath(savedPath);
-            com.squareup.picasso.Picasso.get().load(new java.io.File(savedPath))
+            com.squareup.picasso.Picasso.get().load(new File(savedPath))
                     .placeholder(R.drawable.ic_person_placeholder)
                     .into(ivProfilePhoto);
             Toast.makeText(this, "Photo updated", Toast.LENGTH_SHORT).show();
@@ -267,13 +352,16 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         if (resultCode != RESULT_OK) return;
 
         if (requestCode == REQ_PICK_IMAGE && data != null && data.getData() != null) {
+            try {
+                // persistable permission for image URI use
+                getContentResolver().takePersistableUriPermission(
+                        data.getData(), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (Exception ignore) {}
             handleSelectedImage(data.getData());
         } else if (requestCode == REQ_CAPTURE_IMAGE && pendingCameraUri != null) {
-            // Camera wrote to our uri; reuse same uri to save file into app storage
             handleSelectedImage(pendingCameraUri);
             pendingCameraUri = null;
         } else if (requestCode == REQUEST_CHANGE_PASSWORD && resultCode == RESULT_OK) {
-            // Refresh employee data to update password status
             loadEmployeeData();
             Toast.makeText(this, "Password changed successfully", Toast.LENGTH_SHORT).show();
         }
