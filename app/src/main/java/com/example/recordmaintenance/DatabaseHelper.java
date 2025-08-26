@@ -12,7 +12,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     // Database Information
     private static final String DB_NAME = "EmployeeRecords.db";
-    private static final int DB_VERSION = 3; // Incremented for TblUserMaster addition
+    private static final int DB_VERSION = 4; // Incremented for profile photo addition
 
     // Table Names
     public static final String TABLE_USER_MASTER = "TblUserMaster";
@@ -36,6 +36,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String JOINED_DATE = "JoinedDate";
     public static final String SALARY = "Salary";
     public static final String PASSWORD_CHANGED = "PasswordChanged"; // Track if initial password changed
+    public static final String PROFILE_PHOTO_PATH = "ProfilePhotoPath"; // NEW: Profile photo path
 
     // Detail Table Columns (unchanged)
     public static final String EMP_CODE = "EmpCode";
@@ -65,7 +66,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     DEPARTMENT + " TEXT, " +
                     JOINED_DATE + " TEXT, " +
                     SALARY + " REAL, " +
-                    PASSWORD_CHANGED + " INTEGER DEFAULT 0" + ")";
+                    PASSWORD_CHANGED + " INTEGER DEFAULT 0, " +
+                    PROFILE_PHOTO_PATH + " TEXT" + ")";  // NEW: Profile photo path
 
     // Create Detail Table SQL (unchanged)
     private static final String CREATE_DETAIL_TABLE =
@@ -96,6 +98,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        if (oldVersion < 4) {
+            // Add profile photo path column
+            db.execSQL("ALTER TABLE " + TABLE_MASTER + " ADD COLUMN " + PROFILE_PHOTO_PATH + " TEXT");
+        }
+
         if (oldVersion < 3) {
             // Create TblUserMaster table
             db.execSQL(CREATE_USER_MASTER_TABLE);

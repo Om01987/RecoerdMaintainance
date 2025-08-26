@@ -10,14 +10,12 @@
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
-
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="?attr/colorPrimary"
             app:titleTextColor="@android:color/white" />
-
     </com.google.android.material.appbar.AppBarLayout>
 
     <!-- Main Content -->
@@ -31,6 +29,44 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
+
+            <!-- Profile Photo Section -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp">
+
+                <FrameLayout
+                    android:layout_width="120dp"
+                    android:layout_height="120dp">
+
+                    <!-- Circular Profile Photo -->
+                    <de.hdodenhof.circleimageview.CircleImageView
+                        android:id="@+id/ivProfilePhoto"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/ic_person_placeholder"
+                        android:scaleType="centerCrop"
+                        app:civ_border_width="2dp"
+                        app:civ_border_color="@color/design_default_color_primary" />
+
+                    <!-- Small Edit Overlay Icon -->
+                    <ImageView
+                        android:id="@+id/ivEditOverlay"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:src="@drawable/ic_edit_small"
+                        android:layout_gravity="bottom|end"
+                        android:layout_margin="4dp"
+                        android:background="@drawable/bg_card"
+                        android:padding="4dp"
+                        android:elevation="2dp"/>
+
+                </FrameLayout>
+            </LinearLayout>
 
             <!-- Personal Information Card -->
             <androidx.cardview.widget.CardView
@@ -62,7 +98,6 @@
                         android:text="Full Name"
                         android:textSize="12sp"
                         android:textColor="#666666" />
-
                     <TextView
                         android:id="@+id/tvEmployeeName"
                         android:layout_width="wrap_content"
@@ -78,7 +113,6 @@
                         android:text="Employee ID"
                         android:textSize="12sp"
                         android:textColor="#666666" />
-
                     <TextView
                         android:id="@+id/tvEmployeeId"
                         android:layout_width="wrap_content"
@@ -94,16 +128,13 @@
                         android:text="Email Address"
                         android:textSize="12sp"
                         android:textColor="#666666" />
-
                     <TextView
                         android:id="@+id/tvEmail"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="employee@example.com"
                         android:textSize="16sp" />
-
                 </LinearLayout>
-
             </androidx.cardview.widget.CardView>
 
             <!-- Job Information Card -->
@@ -141,21 +172,18 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:orientation="vertical">
-
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Designation"
                                 android:textSize="12sp"
                                 android:textColor="#666666" />
-
                             <TextView
                                 android:id="@+id/tvDesignation"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Software Developer"
                                 android:textSize="16sp" />
-
                         </LinearLayout>
 
                         <LinearLayout
@@ -163,23 +191,19 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:orientation="vertical">
-
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Department"
                                 android:textSize="12sp"
                                 android:textColor="#666666" />
-
                             <TextView
                                 android:id="@+id/tvDepartment"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="IT"
                                 android:textSize="16sp" />
-
                         </LinearLayout>
-
                     </LinearLayout>
 
                     <LinearLayout
@@ -192,14 +216,12 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:orientation="vertical">
-
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Salary"
                                 android:textSize="12sp"
                                 android:textColor="#666666" />
-
                             <TextView
                                 android:id="@+id/tvSalary"
                                 android:layout_width="wrap_content"
@@ -208,7 +230,6 @@
                                 android:textSize="16sp"
                                 android:textStyle="bold"
                                 android:textColor="@android:color/holo_green_dark" />
-
                         </LinearLayout>
 
                         <LinearLayout
@@ -216,27 +237,21 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:orientation="vertical">
-
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Joined Date"
                                 android:textSize="12sp"
                                 android:textColor="#666666" />
-
                             <TextView
                                 android:id="@+id/tvJoinedDate"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="2023-01-15"
                                 android:textSize="16sp" />
-
                         </LinearLayout>
-
                     </LinearLayout>
-
                 </LinearLayout>
-
             </androidx.cardview.widget.CardView>
 
             <!-- Address Information Card -->
@@ -269,7 +284,6 @@
                         android:text="Address Line 1"
                         android:textSize="12sp"
                         android:textColor="#666666" />
-
                     <TextView
                         android:id="@+id/tvAddressLine1"
                         android:layout_width="wrap_content"
@@ -284,7 +298,6 @@
                         android:text="Address Line 2"
                         android:textSize="12sp"
                         android:textColor="#666666" />
-
                     <TextView
                         android:id="@+id/tvAddressLine2"
                         android:layout_width="wrap_content"
@@ -304,21 +317,18 @@
                             android:layout_weight="1"
                             android:orientation="vertical"
                             android:layout_marginEnd="8dp">
-
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="City"
                                 android:textSize="12sp"
                                 android:textColor="#666666" />
-
                             <TextView
                                 android:id="@+id/tvCity"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Mumbai"
                                 android:textSize="16sp" />
-
                         </LinearLayout>
 
                         <LinearLayout
@@ -327,21 +337,18 @@
                             android:layout_weight="1"
                             android:orientation="vertical"
                             android:layout_marginEnd="8dp">
-
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="State"
                                 android:textSize="12sp"
                                 android:textColor="#666666" />
-
                             <TextView
                                 android:id="@+id/tvState"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Maharashtra"
                                 android:textSize="16sp" />
-
                         </LinearLayout>
 
                         <LinearLayout
@@ -349,27 +356,21 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:orientation="vertical">
-
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Country"
                                 android:textSize="12sp"
                                 android:textColor="#666666" />
-
                             <TextView
                                 android:id="@+id/tvCountry"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="India"
                                 android:textSize="16sp" />
-
                         </LinearLayout>
-
                     </LinearLayout>
-
                 </LinearLayout>
-
             </androidx.cardview.widget.CardView>
 
             <!-- Security Information Card -->
@@ -401,7 +402,6 @@
                         android:text="Password Status"
                         android:textSize="12sp"
                         android:textColor="#666666" />
-
                     <TextView
                         android:id="@+id/tvPasswordStatus"
                         android:layout_width="wrap_content"
@@ -417,13 +417,9 @@
                         android:text="Change Password"
                         app:icon="@android:drawable/ic_lock_lock"
                         app:cornerRadius="8dp" />
-
                 </LinearLayout>
-
             </androidx.cardview.widget.CardView>
 
         </LinearLayout>
-
     </androidx.core.widget.NestedScrollView>
-
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

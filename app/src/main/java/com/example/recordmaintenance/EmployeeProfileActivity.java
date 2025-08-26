@@ -11,10 +11,12 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
+import de.hdodenhof.circleimageview.CircleImageView;
 
 public class EmployeeProfileActivity extends AppCompatActivity {
-
     private static final int REQUEST_CHANGE_PASSWORD = 200;
+    private static final int REQ_PICK_IMAGE = 501;
+    private static final int REQ_CAPTURE_IMAGE = 502;
 
     // UI Components
     private MaterialToolbar toolbar;
@@ -23,6 +25,11 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     private TextView tvAddressLine1, tvAddressLine2, tvCity, tvState, tvCountry;
     private MaterialButton btnChangePassword;
     private CardView cvPersonalInfo, cvJobInfo, cvAddressInfo, cvSecurityInfo;
+
+    // Profile photo
+    private CircleImageView ivProfilePhoto;
+    private android.view.View ivEditOverlay;
+    private android.net.Uri pendingCameraUri = null;
 
     // Data Components
     private EmployeeRepository repository;
@@ -43,7 +50,6 @@ public class EmployeeProfileActivity extends AppCompatActivity {
 
         repository = new EmployeeRepository(this);
         repository.open();
-
         initializeViews();
         setupToolbar();
         loadEmployeeData();
@@ -52,34 +58,33 @@ public class EmployeeProfileActivity extends AppCompatActivity {
 
     private void initializeViews() {
         toolbar = findViewById(R.id.toolbar);
-
         // Personal Info
         tvEmployeeName = findViewById(R.id.tvEmployeeName);
         tvEmployeeId = findViewById(R.id.tvEmployeeId);
         tvEmail = findViewById(R.id.tvEmail);
-
         // Job Info
         tvDesignation = findViewById(R.id.tvDesignation);
         tvDepartment = findViewById(R.id.tvDepartment);
         tvSalary = findViewById(R.id.tvSalary);
         tvJoinedDate = findViewById(R.id.tvJoinedDate);
-
         // Address Info
         tvAddressLine1 = findViewById(R.id.tvAddressLine1);
         tvAddressLine2 = findViewById(R.id.tvAddressLine2);
         tvCity = findViewById(R.id.tvCity);
         tvState = findViewById(R.id.tvState);
         tvCountry = findViewById(R.id.tvCountry);
-
         // Security Info
         tvPasswordStatus = findViewById(R.id.tvPasswordStatus);
         btnChangePassword = findViewById(R.id.btnChangePassword);
-
         // Card Views
         cvPersonalInfo = findViewById(R.id.cvPersonalInfo);
         cvJobInfo = findViewById(R.id.cvJobInfo);
         cvAddressInfo = findViewById(R.id.cvAddressInfo);
         cvSecurityInfo = findViewById(R.id.cvSecurityInfo);
+
+        // Profile photo views
+        ivProfilePhoto = findViewById(R.id.ivProfilePhoto);
+        ivEditOverlay = findViewById(R.id.ivEditOverlay);
     }
 
     private void setupToolbar() {
@@ -92,7 +97,6 @@ public class EmployeeProfileActivity extends AppCompatActivity {
 
     private void loadEmployeeData() {
         currentEmployee = repository.getEmployeeByEmpId(employeeId);
-
         if (currentEmployee != null) {
             displayEmployeeData();
         } else {
@@ -106,27 +110,34 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         tvEmployeeName.setText(currentEmployee.getEmpName());
         tvEmployeeId.setText(currentEmployee.getEmpId());
         tvEmail.setText(currentEmployee.getEmpEmail() != null ? currentEmployee.getEmpEmail() : "Not provided");
-
         // Job Info
         tvDesignation.setText(currentEmployee.getDesignation() != null ? currentEmployee.getDesignation() : "Not assigned");
         tvDepartment.setText(currentEmployee.getDepartment() != null ? currentEmployee.getDepartment() : "Not assigned");
         tvSalary.setText("₹" + String.valueOf(currentEmployee.getSalary()));
         tvJoinedDate.setText(currentEmployee.getJoinedDate() != null ? currentEmployee.getJoinedDate() : "Not available");
-
         // Address Info
         tvAddressLine1.setText(currentEmployee.getAddressLine1() != null ? currentEmployee.getAddressLine1() : "Not provided");
         tvAddressLine2.setText(currentEmployee.getAddressLine2() != null ? currentEmployee.getAddressLine2() : "Not provided");
         tvCity.setText(currentEmployee.getCity() != null ? currentEmployee.getCity() : "Not provided");
         tvState.setText(currentEmployee.getState() != null ? currentEmployee.getState() : "Not provided");
         tvCountry.setText(currentEmployee.getCountry() != null ? currentEmployee.getCountry() : "Not provided");
-
         // Security Info
         tvPasswordStatus.setText(currentEmployee.isPasswordChanged() ?
                 "Password has been changed" : "Using initial password");
-
         // Update toolbar title with employee name
         if (getSupportActionBar() != null) {
             getSupportActionBar().setTitle(currentEmployee.getEmpName() + "'s Profile");
+        }
+
+        // Profile Photo logic
+        String photoPath = currentEmployee.getProfilePhotoPath();
+        if (photoPath != null && !photoPath.trim().isEmpty() && ImageUtils.isPhotoExists(photoPath)) {
+            com.squareup.picasso.Picasso.get()
+                    .load(new java.io.File(photoPath))
+                    .placeholder(R.drawable.ic_person_placeholder)
+                    .into(ivProfilePhoto);
+        } else {
+            ivProfilePhoto.setImageResource(R.drawable.ic_person_placeholder);
         }
     }
 
@@ -136,6 +147,78 @@ public class EmployeeProfileActivity extends AppCompatActivity {
             intent.putExtra("employeeId", employeeId);
             startActivityForResult(intent, REQUEST_CHANGE_PASSWORD);
         });
+
+        // Profile photo change logic
+        android.view.View.OnClickListener openPhotoMenu = v -> {
+            boolean hasPhoto = currentEmployee.getProfilePhotoPath() != null
+                    && !currentEmployee.getProfilePhotoPath().trim().isEmpty()
+                    && ImageUtils.isPhotoExists(currentEmployee.getProfilePhotoPath());
+            PhotoSelectionDialogFragment dlg = PhotoSelectionDialogFragment.newInstance(hasPhoto);
+            dlg.setPhotoSelectionListener(new PhotoSelectionDialogFragment.PhotoSelectionListener() {
+                @Override public void onTakePhotoSelected() { openCamera(); }
+                @Override public void onChooseFromGallerySelected() { openGallery(); }
+                @Override public void onViewFullImageSelected() { showFullImage(); }
+                @Override public void onRemovePhotoSelected() { removePhoto(); }
+            });
+            dlg.show(getSupportFragmentManager(), "PHOTO_MENU");
+        };
+        ivProfilePhoto.setOnClickListener(openPhotoMenu);
+        if (ivEditOverlay != null) ivEditOverlay.setOnClickListener(openPhotoMenu);
+    }
+
+    private void openGallery() {
+        Intent intent = new Intent(Intent.ACTION_PICK);
+        intent.setType("image/*");
+        startActivityForResult(Intent.createChooser(intent, "Select Picture"), REQ_PICK_IMAGE);
+    }
+
+    private void openCamera() {
+        try {
+            java.io.File dir = ImageUtils.getProfilePhotosDirectory(this);
+            String fileName = ImageUtils.generatePhotoFileName(employeeId);
+            java.io.File out = new java.io.File(dir, fileName);
+            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                    this, getPackageName() + ".provider", out);
+            pendingCameraUri = uri;
+
+            Intent camera = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+            camera.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri);
+            camera.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(camera, REQ_CAPTURE_IMAGE);
+        } catch (Exception e) {
+            Toast.makeText(this, "Camera not available", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showFullImage() {
+        String path = currentEmployee.getProfilePhotoPath();
+        FullImageViewDialogFragment.newInstance(path).show(getSupportFragmentManager(), "FULL_IMAGE");
+    }
+
+    private void removePhoto() {
+        String path = currentEmployee.getProfilePhotoPath();
+        if (path != null) ImageUtils.deleteProfilePhoto(path);
+        if (repository.updateEmployeeProfilePhoto(employeeId, null)) {
+            currentEmployee.setProfilePhotoPath(null);
+            ivProfilePhoto.setImageResource(R.drawable.ic_person_placeholder);
+            Toast.makeText(this, "Photo removed", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Failed to remove", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void handleSelectedImage(android.net.Uri uri) {
+        // Save copy to internal storage and persist path
+        String savedPath = ImageUtils.saveImageToInternalStorage(this, uri, employeeId);
+        if (savedPath != null && repository.updateEmployeeProfilePhoto(employeeId, savedPath)) {
+            currentEmployee.setProfilePhotoPath(savedPath);
+            com.squareup.picasso.Picasso.get().load(new java.io.File(savedPath))
+                    .placeholder(R.drawable.ic_person_placeholder)
+                    .into(ivProfilePhoto);
+            Toast.makeText(this, "Photo updated", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Failed to save photo", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
@@ -147,7 +230,6 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-
         if (id == android.R.id.home) {
             onBackPressed();
             return true;
@@ -159,7 +241,6 @@ public class EmployeeProfileActivity extends AppCompatActivity {
             Toast.makeText(this, "Profile refreshed", Toast.LENGTH_SHORT).show();
             return true;
         }
-
         return super.onOptionsItemSelected(item);
     }
 
@@ -183,7 +264,15 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == REQUEST_CHANGE_PASSWORD && resultCode == RESULT_OK) {
+        if (resultCode != RESULT_OK) return;
+
+        if (requestCode == REQ_PICK_IMAGE && data != null && data.getData() != null) {
+            handleSelectedImage(data.getData());
+        } else if (requestCode == REQ_CAPTURE_IMAGE && pendingCameraUri != null) {
+            // Camera wrote to our uri; reuse same uri to save file into app storage
+            handleSelectedImage(pendingCameraUri);
+            pendingCameraUri = null;
+        } else if (requestCode == REQUEST_CHANGE_PASSWORD && resultCode == RESULT_OK) {
             // Refresh employee data to update password status
             loadEmployeeData();
             Toast.makeText(this, "Password changed successfully", Toast.LENGTH_SHORT).show();

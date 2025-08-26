@@ -13,7 +13,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class EmployeeRepository {
-
     private static final String TAG = "EmployeeRepository";
     private DatabaseHelper dbHelper;
     private SQLiteDatabase database;
@@ -39,9 +38,6 @@ public class EmployeeRepository {
         }
     }
 
-    /**
-     * Insert Employee with auto-generated code and password
-     */
     public InsertResult insertEmployee(Employee employee) {
         database.beginTransaction();
         try {
@@ -71,6 +67,7 @@ public class EmployeeRepository {
             masterValues.put(DatabaseHelper.JOINED_DATE, employee.getJoinedDate());
             masterValues.put(DatabaseHelper.SALARY, employee.getSalary());
             masterValues.put(DatabaseHelper.PASSWORD_CHANGED, employee.isPasswordChanged() ? 1 : 0);
+            masterValues.put(DatabaseHelper.PROFILE_PHOTO_PATH, employee.getProfilePhotoPath());
 
             long mastCode = database.insert(DatabaseHelper.TABLE_MASTER, null, masterValues);
 
@@ -109,88 +106,65 @@ public class EmployeeRepository {
         }
     }
 
-    /**
-     * Get employee password for admin viewing (returns plain text password) - ADMIN ENHANCED VERSION
-     */
+    public boolean updateEmployeeProfilePhoto(String empId, String photoPath) {
+        ContentValues values = new ContentValues();
+        values.put(DatabaseHelper.PROFILE_PHOTO_PATH, photoPath);
+        int rows = database.update(
+                DatabaseHelper.TABLE_MASTER,
+                values,
+                DatabaseHelper.EMP_ID + " = ?",
+                new String[]{empId});
+        return rows > 0;
+    }
+
     public String getEmployeePassword(String empId) {
         Log.d(TAG, "Getting password for employee: " + empId);
-
-        // Check if we have the plain password stored in memory first
         if (passwordMap.containsKey(empId)) {
             String password = passwordMap.get(empId);
             Log.d(TAG, "Found password in memory for " + empId + ": " + password);
             return password;
         }
-
-        // Check if employee exists
         Employee emp = getEmployeeByEmpId(empId);
         if (emp != null) {
             Log.d(TAG, "Employee found: " + emp.getEmpName() + ", has password: " + (emp.getEmpPassword() != null && !emp.getEmpPassword().trim().isEmpty()));
-
-            // For admin viewing, try to regenerate the initial password pattern
-            // This works for employees who haven't changed their password
             if (emp.getEmpPassword() != null && !emp.getEmpPassword().trim().isEmpty()) {
-
-                // If password hasn't been changed, regenerate the initial password
                 if (!emp.isPasswordChanged()) {
                     String generatedPassword = EmployeeCodeGenerator.generateInitialPassword(emp.getEmpName(), empId);
                     String generatedHash = EmployeeCodeGenerator.hashPassword(generatedPassword);
-
-                    // Verify if this matches the stored hash
                     if (generatedHash.equals(emp.getEmpPassword())) {
-                        // Store for future quick access
                         passwordMap.put(empId, generatedPassword);
                         Log.d(TAG, "Regenerated initial password for " + empId + ": " + generatedPassword);
                         return generatedPassword;
                     }
                 }
-
-                // If password was changed, we can't retrieve the plain text
-                // But for admin functionality, we'll provide a way to reset it
                 return "PASSWORD_CHANGED_BY_EMPLOYEE";
             } else {
-                // Generate and set initial password for employee without one
                 String generatedPassword = EmployeeCodeGenerator.generateInitialPassword(emp.getEmpName(), empId);
                 String hashedPassword = EmployeeCodeGenerator.hashPassword(generatedPassword);
-
                 Log.d(TAG, "Generating new password for " + empId + ": " + generatedPassword);
-
-                // Update database
                 ContentValues values = new ContentValues();
                 values.put(DatabaseHelper.EMP_PASSWORD, hashedPassword);
                 values.put(DatabaseHelper.PASSWORD_CHANGED, 0);
                 database.update(DatabaseHelper.TABLE_MASTER, values,
                         DatabaseHelper.EMP_ID + " = ?", new String[]{empId});
-
-                // Store for admin viewing
                 passwordMap.put(empId, generatedPassword);
                 return generatedPassword;
             }
         }
-
         return "EMPLOYEE_NOT_FOUND";
     }
 
-    /**
-     * Admin function to reset employee password to a new generated one
-     */
     public String resetEmployeePassword(String empId) {
         Employee emp = getEmployeeByEmpId(empId);
         if (emp != null) {
-            // Generate new password
             String newPassword = EmployeeCodeGenerator.generateInitialPassword(emp.getEmpName(), empId);
             String hashedPassword = EmployeeCodeGenerator.hashPassword(newPassword);
-
-            // Update database
             ContentValues values = new ContentValues();
             values.put(DatabaseHelper.EMP_PASSWORD, hashedPassword);
-            values.put(DatabaseHelper.PASSWORD_CHANGED, 0); // Mark as initial password again
-
+            values.put(DatabaseHelper.PASSWORD_CHANGED, 0);
             int result = database.update(DatabaseHelper.TABLE_MASTER, values,
                     DatabaseHelper.EMP_ID + " = ?", new String[]{empId});
-
             if (result > 0) {
-                // Store for admin viewing
                 passwordMap.put(empId, newPassword);
                 Log.d(TAG, "Reset password for " + empId + ": " + newPassword);
                 return newPassword;
@@ -199,60 +173,46 @@ public class EmployeeRepository {
         return null;
     }
 
-    /**
-     * Check if employee password can be viewed by admin
-     */
     public boolean canViewPassword(String empId) {
         Employee emp = getEmployeeByEmpId(empId);
         if (emp != null) {
-            // Can view if password is in memory map or if it's an unchanged initial password
             return passwordMap.containsKey(empId) || !emp.isPasswordChanged();
         }
         return false;
     }
 
-    /**
-     * Get employee by Employee ID with full details
-     */
     public Employee getEmployeeByEmpId(String empId) {
         String query = "SELECT m.*, d.* FROM " + DatabaseHelper.TABLE_MASTER + " m " +
                 "LEFT JOIN " + DatabaseHelper.TABLE_DETAIL + " d " +
                 "ON m." + DatabaseHelper.MAST_CODE + " = d." + DatabaseHelper.EMP_CODE + " " +
                 "WHERE m." + DatabaseHelper.EMP_ID + " = ?";
-
         Cursor cursor = database.rawQuery(query, new String[]{empId});
         Employee employee = null;
-
         if (cursor.moveToFirst()) {
             employee = new Employee();
             employee.setMastCode(cursor.getInt(cursor.getColumnIndexOrThrow(DatabaseHelper.MAST_CODE)));
             employee.setEmpId(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.EMP_ID)));
             employee.setEmpName(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.EMP_NAME)));
-
-            // Handle email safely
             int emailIndex = cursor.getColumnIndex(DatabaseHelper.EMP_EMAIL);
             if (emailIndex != -1 && !cursor.isNull(emailIndex)) {
                 employee.setEmpEmail(cursor.getString(emailIndex));
             }
-
-            // Handle password safely
             int passwordIndex = cursor.getColumnIndex(DatabaseHelper.EMP_PASSWORD);
             if (passwordIndex != -1 && !cursor.isNull(passwordIndex)) {
                 employee.setEmpPassword(cursor.getString(passwordIndex));
             }
-
+            int photoIdx = cursor.getColumnIndex(DatabaseHelper.PROFILE_PHOTO_PATH);
+            if (photoIdx != -1 && !cursor.isNull(photoIdx)) {
+                employee.setProfilePhotoPath(cursor.getString(photoIdx));
+            }
             employee.setDesignation(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.DESIGNATION)));
             employee.setDepartment(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.DEPARTMENT)));
             employee.setJoinedDate(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.JOINED_DATE)));
             employee.setSalary(cursor.getDouble(cursor.getColumnIndexOrThrow(DatabaseHelper.SALARY)));
-
-            // Handle password changed flag safely
             int passwordChangedIndex = cursor.getColumnIndex(DatabaseHelper.PASSWORD_CHANGED);
             if (passwordChangedIndex != -1) {
                 employee.setPasswordChanged(cursor.getInt(passwordChangedIndex) == 1);
             }
-
-            // Load address details if available
             int addressIndex = cursor.getColumnIndex(DatabaseHelper.ADDRESS_LINE1);
             if (addressIndex != -1) {
                 employee.setAddressLine1(cursor.getString(addressIndex));
@@ -262,57 +222,43 @@ public class EmployeeRepository {
                 employee.setCountry(cursor.getString(cursor.getColumnIndex(DatabaseHelper.COUNTRY)));
             }
         }
-
         cursor.close();
         return employee;
     }
 
-    /**
-     * Verify employee login with email or employee ID - ENHANCED WITH DEBUGGING
-     */
     public Employee verifyEmployeeLogin(String emailOrId, String password) {
         Log.d(TAG, "Attempting login for: " + emailOrId);
-
         String hashedPassword = EmployeeCodeGenerator.hashPassword(password);
         Log.d(TAG, "Hashed password: " + hashedPassword.substring(0, 10) + "...");
-
         String query = "SELECT m.*, d.* FROM " + DatabaseHelper.TABLE_MASTER + " m " +
                 "LEFT JOIN " + DatabaseHelper.TABLE_DETAIL + " d " +
                 "ON m." + DatabaseHelper.MAST_CODE + " = d." + DatabaseHelper.EMP_CODE + " " +
                 "WHERE (m." + DatabaseHelper.EMP_ID + " = ? OR m." + DatabaseHelper.EMP_EMAIL + " = ?) " +
                 "AND m." + DatabaseHelper.EMP_PASSWORD + " = ?";
-
         Cursor cursor = database.rawQuery(query, new String[]{emailOrId, emailOrId, hashedPassword});
         Employee employee = null;
-
         Log.d(TAG, "Login query returned " + cursor.getCount() + " results");
-
         if (cursor.moveToFirst()) {
             employee = new Employee();
             employee.setMastCode(cursor.getInt(cursor.getColumnIndexOrThrow(DatabaseHelper.MAST_CODE)));
             employee.setEmpId(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.EMP_ID)));
             employee.setEmpName(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.EMP_NAME)));
-
-            Log.d(TAG, "Login successful for: " + employee.getEmpName() + " (ID: " + employee.getEmpId() + ")");
-
-            // Handle email safely
             int emailIndex = cursor.getColumnIndex(DatabaseHelper.EMP_EMAIL);
             if (emailIndex != -1 && !cursor.isNull(emailIndex)) {
                 employee.setEmpEmail(cursor.getString(emailIndex));
             }
-
+            int photoIdx = cursor.getColumnIndex(DatabaseHelper.PROFILE_PHOTO_PATH);
+            if (photoIdx != -1 && !cursor.isNull(photoIdx)) {
+                employee.setProfilePhotoPath(cursor.getString(photoIdx));
+            }
             employee.setDesignation(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.DESIGNATION)));
             employee.setDepartment(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.DEPARTMENT)));
             employee.setJoinedDate(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.JOINED_DATE)));
             employee.setSalary(cursor.getDouble(cursor.getColumnIndexOrThrow(DatabaseHelper.SALARY)));
-
-            // Handle password changed safely
             int passwordChangedIndex = cursor.getColumnIndex(DatabaseHelper.PASSWORD_CHANGED);
             if (passwordChangedIndex != -1) {
                 employee.setPasswordChanged(cursor.getInt(passwordChangedIndex) == 1);
             }
-
-            // Load address details
             int addressIndex = cursor.getColumnIndex(DatabaseHelper.ADDRESS_LINE1);
             if (addressIndex != -1) {
                 employee.setAddressLine1(cursor.getString(addressIndex));
@@ -324,116 +270,77 @@ public class EmployeeRepository {
         } else {
             Log.d(TAG, "Login failed for: " + emailOrId);
         }
-
         cursor.close();
         return employee;
     }
 
-    /**
-     * Validate old password before changing
-     */
     public boolean validateOldPassword(String empId, String oldPassword) {
         String hashedOldPassword = EmployeeCodeGenerator.hashPassword(oldPassword);
-
         String query = "SELECT COUNT(*) FROM " + DatabaseHelper.TABLE_MASTER +
                 " WHERE " + DatabaseHelper.EMP_ID + " = ? AND " +
                 DatabaseHelper.EMP_PASSWORD + " = ?";
-
         Cursor cursor = database.rawQuery(query, new String[]{empId, hashedOldPassword});
         boolean valid = false;
-
         if (cursor.moveToFirst()) {
             valid = cursor.getInt(0) > 0;
         }
-
         cursor.close();
         return valid;
     }
 
-    /**
-     * Change employee password (enhanced with plain password storage)
-     */
     public boolean changeEmployeePassword(String empId, String newPassword) {
         String hashedPassword = EmployeeCodeGenerator.hashPassword(newPassword);
-
         ContentValues values = new ContentValues();
         values.put(DatabaseHelper.EMP_PASSWORD, hashedPassword);
         values.put(DatabaseHelper.PASSWORD_CHANGED, 1);
-
         int result = database.update(DatabaseHelper.TABLE_MASTER, values,
                 DatabaseHelper.EMP_ID + " = ?", new String[]{empId});
-
         if (result > 0) {
-            // Remove from password map since it's now user-defined
             passwordMap.remove(empId);
             Log.d(TAG, "Password changed for employee: " + empId);
             return true;
         }
-
         return false;
     }
 
-    /**
-     * Migrate existing employees without passwords - FIXED VERSION
-     */
     private void migrateExistingEmployeePasswords() {
         Log.d(TAG, "Starting password migration...");
-
         String query = "SELECT " + DatabaseHelper.MAST_CODE + ", " + DatabaseHelper.EMP_ID + ", " +
                 DatabaseHelper.EMP_NAME + ", " + DatabaseHelper.EMP_PASSWORD +
                 " FROM " + DatabaseHelper.TABLE_MASTER;
-
         Cursor cursor = database.rawQuery(query, null);
         int migrated = 0;
-
         if (cursor.moveToFirst()) {
             do {
                 String empId = cursor.getString(1);
                 String empName = cursor.getString(2);
                 String existingPassword = cursor.getString(3);
-
-                // Only generate password if none exists or is empty
                 if (existingPassword == null || existingPassword.trim().isEmpty()) {
-                    // Generate password for existing employee without one
                     String plainPassword = EmployeeCodeGenerator.generateInitialPassword(empName, empId);
                     String hashedPassword = EmployeeCodeGenerator.hashPassword(plainPassword);
-
-                    // Store plain password for admin viewing
                     passwordMap.put(empId, plainPassword);
-
-                    // Update database with hashed password
                     ContentValues values = new ContentValues();
                     values.put(DatabaseHelper.EMP_PASSWORD, hashedPassword);
-                    values.put(DatabaseHelper.PASSWORD_CHANGED, 0); // Mark as initial password
-
+                    values.put(DatabaseHelper.PASSWORD_CHANGED, 0);
                     database.update(DatabaseHelper.TABLE_MASTER, values,
                             DatabaseHelper.MAST_CODE + " = ?",
                             new String[]{String.valueOf(cursor.getInt(0))});
-
                     migrated++;
                     Log.d(TAG, "Generated password for existing employee: " + empId + " -> " + plainPassword);
                 } else {
-                    // For existing employees with passwords, try to determine if it's an initial password
                     String potentialInitialPassword = EmployeeCodeGenerator.generateInitialPassword(empName, empId);
                     String potentialHash = EmployeeCodeGenerator.hashPassword(potentialInitialPassword);
-
                     if (potentialHash.equals(existingPassword)) {
-                        // This is an initial password, store for admin viewing
                         passwordMap.put(empId, potentialInitialPassword);
                         Log.d(TAG, "Recovered initial password for existing employee: " + empId);
                     }
                 }
-
             } while (cursor.moveToNext());
         }
-
         cursor.close();
         Log.d(TAG, "Migration completed. Updated " + migrated + " employees with new passwords.");
     }
 
-    /**
-     * Get password statistics for admin dashboard
-     */
     public PasswordStatistics getPasswordStatistics() {
         String query = "SELECT " +
                 "COUNT(*) as total, " +
@@ -441,58 +348,41 @@ public class EmployeeRepository {
                 "SUM(CASE WHEN " + DatabaseHelper.PASSWORD_CHANGED + " = 1 THEN 1 ELSE 0 END) as changed " +
                 "FROM " + DatabaseHelper.TABLE_MASTER +
                 " WHERE " + DatabaseHelper.EMP_PASSWORD + " IS NOT NULL AND " + DatabaseHelper.EMP_PASSWORD + " != ''";
-
         Cursor cursor = database.rawQuery(query, null);
         PasswordStatistics stats = new PasswordStatistics();
-
         if (cursor.moveToFirst()) {
             stats.totalEmployees = cursor.getInt(0);
             stats.initialPasswords = cursor.getInt(1);
             stats.changedPasswords = cursor.getInt(2);
             stats.viewablePasswords = passwordMap.size();
         }
-
         cursor.close();
         return stats;
     }
 
-    /**
-     * Validate employee data before insertion
-     */
     public ValidationResult validateEmployeeData(Employee employee) {
         List<String> errors = new ArrayList<>();
-
-        // Validate required fields
         if (employee.getEmpName() == null || employee.getEmpName().trim().isEmpty()) {
             errors.add("Employee name is required");
         }
-
         if (employee.getEmpEmail() == null || employee.getEmpEmail().trim().isEmpty()) {
             errors.add("Email is required");
         } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(employee.getEmpEmail()).matches()) {
             errors.add("Invalid email format");
         }
-
-        // Check if email already exists (only for new employees)
         if (employee.getMastCode() == 0 && isEmailExists(employee.getEmpEmail())) {
             errors.add("Email address already exists");
         }
-
         return new ValidationResult(errors.isEmpty(), errors);
     }
 
-    /**
-     * Check if email already exists in database
-     */
     private boolean isEmailExists(String email) {
         if (email == null || email.trim().isEmpty()) {
             return false;
         }
-
         String query = "SELECT COUNT(*) FROM " + DatabaseHelper.TABLE_MASTER +
                 " WHERE " + DatabaseHelper.EMP_EMAIL + " = ?";
         Cursor cursor = database.rawQuery(query, new String[]{email});
-
         boolean exists = false;
         if (cursor.moveToFirst()) {
             exists = cursor.getInt(0) > 0;
@@ -501,12 +391,8 @@ public class EmployeeRepository {
         return exists;
     }
 
-    /**
-     * Get All Employees with Details (updated query with new fields)
-     */
     public List<Employee> getAllEmployees() {
         List<Employee> employees = new ArrayList<>();
-
         String query = "SELECT m." + DatabaseHelper.MAST_CODE + ", " +
                 "m." + DatabaseHelper.EMP_ID + ", " +
                 "m." + DatabaseHelper.EMP_NAME + ", " +
@@ -517,6 +403,7 @@ public class EmployeeRepository {
                 "m." + DatabaseHelper.JOINED_DATE + ", " +
                 "m." + DatabaseHelper.SALARY + ", " +
                 "m." + DatabaseHelper.PASSWORD_CHANGED + ", " +
+                "m." + DatabaseHelper.PROFILE_PHOTO_PATH + ", " +
                 "d." + DatabaseHelper.ADDRESS_LINE1 + ", " +
                 "d." + DatabaseHelper.ADDRESS_LINE2 + ", " +
                 "d." + DatabaseHelper.CITY + ", " +
@@ -525,9 +412,7 @@ public class EmployeeRepository {
                 "FROM " + DatabaseHelper.TABLE_MASTER + " m " +
                 "LEFT JOIN " + DatabaseHelper.TABLE_DETAIL + " d " +
                 "ON m." + DatabaseHelper.MAST_CODE + " = d." + DatabaseHelper.EMP_CODE;
-
         Cursor cursor = database.rawQuery(query, null);
-
         if (cursor.moveToFirst()) {
             do {
                 Employee employee = new Employee();
@@ -541,23 +426,19 @@ public class EmployeeRepository {
                 employee.setJoinedDate(cursor.getString(7));
                 employee.setSalary(cursor.getDouble(8));
                 employee.setPasswordChanged(cursor.getInt(9) == 1);
-                employee.setAddressLine1(cursor.getString(10));
-                employee.setAddressLine2(cursor.getString(11));
-                employee.setCity(cursor.getString(12));
-                employee.setState(cursor.getString(13));
-                employee.setCountry(cursor.getString(14));
-
+                employee.setProfilePhotoPath(cursor.getString(10));
+                employee.setAddressLine1(cursor.getString(11));
+                employee.setAddressLine2(cursor.getString(12));
+                employee.setCity(cursor.getString(13));
+                employee.setState(cursor.getString(14));
+                employee.setCountry(cursor.getString(15));
                 employees.add(employee);
             } while (cursor.moveToNext());
         }
-
         cursor.close();
         return employees;
     }
 
-    /**
-     * Update Employee (existing method updated for new fields)
-     */
     public int updateEmployee(Employee employee) {
         database.beginTransaction();
         try {
@@ -569,7 +450,7 @@ public class EmployeeRepository {
             masterValues.put(DatabaseHelper.DEPARTMENT, employee.getDepartment());
             masterValues.put(DatabaseHelper.JOINED_DATE, employee.getJoinedDate());
             masterValues.put(DatabaseHelper.SALARY, employee.getSalary());
-            // Note: Don't update password here, use separate method
+            masterValues.put(DatabaseHelper.PROFILE_PHOTO_PATH, employee.getProfilePhotoPath());
 
             int masterResult = database.update(DatabaseHelper.TABLE_MASTER, masterValues,
                     DatabaseHelper.MAST_CODE + " = ?",
@@ -597,9 +478,7 @@ public class EmployeeRepository {
         }
     }
 
-    // Existing delete method remains unchanged
     public void deleteEmployee(int mastCode) {
-        // Get employee ID before deleting to remove from password map
         String empId = null;
         String query = "SELECT " + DatabaseHelper.EMP_ID + " FROM " + DatabaseHelper.TABLE_MASTER +
                 " WHERE " + DatabaseHelper.MAST_CODE + " = ?";
@@ -608,26 +487,20 @@ public class EmployeeRepository {
             empId = cursor.getString(0);
         }
         cursor.close();
-
-        // Delete from database (cascade will handle detail table)
         database.delete(DatabaseHelper.TABLE_MASTER,
                 DatabaseHelper.MAST_CODE + " = ?",
                 new String[]{String.valueOf(mastCode)});
-
-        // Remove from password map
         if (empId != null) {
             passwordMap.remove(empId);
         }
     }
 
-    // Helper classes
     public static class InsertResult {
         private final boolean success;
         private final long mastCode;
         private final String empId;
         private final String generatedPassword;
         private final String message;
-
         public InsertResult(boolean success, long mastCode, String empId, String generatedPassword, String message) {
             this.success = success;
             this.mastCode = mastCode;
@@ -635,8 +508,6 @@ public class EmployeeRepository {
             this.generatedPassword = generatedPassword;
             this.message = message;
         }
-
-        // Getters
         public boolean isSuccess() { return success; }
         public long getMastCode() { return mastCode; }
         public String getEmpId() { return empId; }
@@ -647,12 +518,10 @@ public class EmployeeRepository {
     public static class ValidationResult {
         private final boolean valid;
         private final List<String> errors;
-
         public ValidationResult(boolean valid, List<String> errors) {
             this.valid = valid;
             this.errors = errors;
         }
-
         public boolean isValid() { return valid; }
         public List<String> getErrors() { return errors; }
     }

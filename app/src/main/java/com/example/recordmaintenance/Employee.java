@@ -11,6 +11,7 @@ public class Employee {
     private String joinedDate;
     private double salary;
     private boolean passwordChanged; // New field
+    private String profilePhotoPath; // NEW: Profile photo path
     private String addressLine1;
     private String addressLine2;
     private String city;
@@ -32,6 +33,7 @@ public class Employee {
         this.joinedDate = joinedDate;
         this.salary = salary;
         this.passwordChanged = false; // Default to false for new employees
+        this.profilePhotoPath = null; // Default to null for new employees
         this.addressLine1 = addressLine1;
         this.addressLine2 = addressLine2;
         this.city = city;
@@ -58,6 +60,10 @@ public class Employee {
 
     public boolean isPasswordChanged() { return passwordChanged; }
     public void setPasswordChanged(boolean passwordChanged) { this.passwordChanged = passwordChanged; }
+
+    // NEW: Profile photo getters and setters
+    public String getProfilePhotoPath() { return profilePhotoPath; }
+    public void setProfilePhotoPath(String profilePhotoPath) { this.profilePhotoPath = profilePhotoPath; }
 
     // Rest of existing getters and setters remain the same...
     public String getDesignation() { return designation; }
