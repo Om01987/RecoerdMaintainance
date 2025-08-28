@@ -299,4 +299,8 @@ public class EmployeeAdapter extends RecyclerView.Adapter<EmployeeAdapter.Employ
             btnView = itemView.findViewById(R.id.btnView);
         }
     }
+
+    public List<Employee> getCurrentItems() {
+        return new ArrayList<>(employeeListFiltered);
+    }
 }

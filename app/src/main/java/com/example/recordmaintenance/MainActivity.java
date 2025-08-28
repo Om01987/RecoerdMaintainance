@@ -1,6 +1,7 @@
 package com.example.recordmaintenance;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -16,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.cardview.widget.CardView;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -27,6 +29,7 @@ import java.util.Set;
 public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_ADD = 100;
     private static final int REQUEST_EDIT = 101;
+    private static final int REQ_CREATE_CSV = 1020; // NEW: CSV export request code
 
     // UI Components
     private MaterialToolbar toolbar;
@@ -226,14 +229,11 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage(details.toString())
                 .setPositiveButton("Close", null);
 
-        // Add appropriate action buttons based on password status
         if ("PASSWORD_CHANGED_BY_EMPLOYEE".equals(plainPassword)) {
-            // Password was changed - offer reset option
             builder.setNegativeButton("Reset Password", (dialog, which) -> {
                 showResetPasswordConfirmation(employee);
             });
         } else if (isPasswordCopyable(plainPassword)) {
-            // Password is viewable - offer copy option
             builder.setNeutralButton("Copy Password", (dialog, which) -> {
                 copyPasswordToClipboard(plainPassword);
             });
@@ -296,12 +296,10 @@ public class MainActivity extends AppCompatActivity {
                 .setTitle("New Password Generated")
                 .setMessage(message)
                 .setPositiveButton("OK", (dialog, which) -> {
-                    // Refresh the employee list to reflect changes
                     loadEmployeeData();
                 })
                 .setNeutralButton("Copy Password", (dialog, which) -> {
                     copyPasswordToClipboard(newPassword);
-                    // Refresh the employee list to reflect changes
                     loadEmployeeData();
                 })
                 .setCancelable(false)
@@ -376,7 +374,6 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            // Update total employees count
             tvTotalEmployees.setText(String.valueOf(filtered));
         }
     }
@@ -385,6 +382,87 @@ public class MainActivity extends AppCompatActivity {
         String t = new SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
                 .format(new Date());
         tvLastUpdated.setText("Updated "+t);
+    }
+
+    // ============= CSV EXPORT FUNCTIONALITY (NEW) =============
+
+    /**
+     * Launches the system file picker for CSV creation
+     * Uses ACTION_CREATE_DOCUMENT to let user choose filename and location
+     */
+    private void launchCreateCsvDocument() {
+        // Generate suggested filename with timestamp
+        String suggestedName = "Employees_" +
+                new SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault()).format(new Date()) +
+                ".csv";
+
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/csv"); // Correct MIME type for CSV files
+        intent.putExtra(Intent.EXTRA_TITLE, suggestedName);
+
+        try {
+            startActivityForResult(intent, REQ_CREATE_CSV);
+        } catch (Exception e) {
+            Toast.makeText(this, "File picker not available: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /**
+     * Gets the list of employees to export
+     * Prioritizes the currently displayed/filtered list from adapter
+     */
+    private List<Employee> getEmployeesForExport() {
+        if (adapter != null) {
+            try {
+                // Export exactly what's shown after filters/search
+                return adapter.getCurrentItems();
+            } catch (Exception e) {
+                // Fallback to repository if adapter method fails
+                return repository.getAllEmployees();
+            }
+        }
+        return repository.getAllEmployees();
+    }
+
+    /**
+     * Exports employee data to the selected URI as CSV
+     * @param uri The Uri from ACTION_CREATE_DOCUMENT result
+     */
+    private void exportToUri(Uri uri) {
+        OutputStream outputStream = null;
+        try {
+            // Open output stream for writing
+            outputStream = getContentResolver().openOutputStream(uri, "w");
+            if (outputStream == null) {
+                Toast.makeText(this, "Cannot open file for writing", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // Get employees to export
+            List<Employee> employeesToExport = getEmployeesForExport();
+
+            // Write CSV using utility class
+            CsvUtils.writeEmployeesToCsv(outputStream, employeesToExport);
+
+            // Success feedback
+            String message = "Successfully exported " + employeesToExport.size() + " employee(s) to CSV";
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+
+        } catch (Exception e) {
+            // Error feedback
+            Toast.makeText(this, "Export failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+        } finally {
+            // Always close the stream
+            if (outputStream != null) {
+                try {
+                    outputStream.close();
+                } catch (Exception ignore) {
+                    // Ignore close errors
+                }
+            }
+        }
     }
 
     @Override
@@ -430,12 +508,21 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (id == R.id.action_search) {
-            // Search functionality is handled in onCreateOptionsMenu
             return true;
         }
 
         if (id == R.id.action_filter_sort) {
             showFilterSortDialog();
+            return true;
+        }
+
+        // NEW: Handle CSV export action
+        if (id == R.id.action_export_csv) {
+            if (adapter == null || adapter.getFilteredCount() == 0) {
+                Toast.makeText(this, "No employees to export", Toast.LENGTH_SHORT).show();
+            } else {
+                launchCreateCsvDocument();
+            }
             return true;
         }
 
@@ -459,13 +546,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onActivityResult(int req, int res, @Nullable Intent d) {
-        super.onActivityResult(req, res, d);
+    protected void onActivityResult(int req, int res, @Nullable Intent data) {
+        super.onActivityResult(req, res, data);
+
+        // Handle existing results
         if ((req == REQUEST_ADD || req == REQUEST_EDIT) && res == RESULT_OK) {
             loadEmployeeData();
             updateLastRefreshTime();
             String message = (req == REQUEST_ADD) ? "Employee added successfully" : "Employee updated successfully";
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // NEW: Handle CSV export result
+        if (req == REQ_CREATE_CSV && res == RESULT_OK && data != null && data.getData() != null) {
+            exportToUri(data.getData());
+            return;
         }
     }
 
