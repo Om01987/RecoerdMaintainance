@@ -163,7 +163,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 }
                 hexString.append(hex);
             }
-// updated
 
             return hexString.toString();
         } catch (NoSuchAlgorithmException e) {

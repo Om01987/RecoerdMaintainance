@@ -202,10 +202,12 @@ public class EmployeeProfileActivity extends AppCompatActivity {
 
     private void ensurePermissionsThen(OpenAction action) {
         List<String> perms = new ArrayList<>();
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             perms.add(Manifest.permission.CAMERA);
         }
+
         if (Build.VERSION.SDK_INT >= 33) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -217,6 +219,7 @@ public class EmployeeProfileActivity extends AppCompatActivity {
                 perms.add(Manifest.permission.READ_EXTERNAL_STORAGE);
             }
         }
+
         if (perms.isEmpty()) {
             action.run();
         } else {
@@ -239,6 +242,7 @@ public class EmployeeProfileActivity extends AppCompatActivity {
             }
             if (allGranted && pendingAction != null) {
                 pendingAction.run();
+                pendingAction = null;
             } else {
                 Toast.makeText(this, "Permissions required to access camera/gallery", Toast.LENGTH_LONG).show();
             }
@@ -293,7 +297,6 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     }
 
     private void handleSelectedImage(Uri uri) {
-        // Save copy to internal storage and persist path
         String savedPath = ImageUtils.saveImageToInternalStorage(this, uri, employeeId);
         if (savedPath != null && repository.updateEmployeeProfilePhoto(employeeId, savedPath)) {
             currentEmployee.setProfilePhotoPath(savedPath);
@@ -353,7 +356,6 @@ public class EmployeeProfileActivity extends AppCompatActivity {
 
         if (requestCode == REQ_PICK_IMAGE && data != null && data.getData() != null) {
             try {
-                // persistable permission for image URI use
                 getContentResolver().takePersistableUriPermission(
                         data.getData(), Intent.FLAG_GRANT_READ_URI_PERMISSION);
             } catch (Exception ignore) {}
