@@ -6,8 +6,6 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
-
-
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -18,35 +16,42 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RecordMaintenance">
 
-        <!-- Forgot Password Activity -->
+        <!-- FileProvider for camera capture -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/filepaths" />
+        </provider>
+
+        <!-- Existing activities... -->
         <activity
             android:name=".ForgotPasswordActivity"
             android:exported="false"
             android:parentActivityName=".LoginActivity"
             android:theme="@style/Theme.RecordMaintenance" />
 
-        <!-- Reset Password Activity -->
         <activity
             android:name=".ResetPasswordActivity"
             android:exported="false"
             android:parentActivityName=".ForgotPasswordActivity"
             android:theme="@style/Theme.RecordMaintenance" />
 
-        <!-- Change Password Activity -->
         <activity
             android:name=".ChangePasswordActivity"
             android:exported="false"
             android:parentActivityName=".EmployeeProfileActivity"
             android:theme="@style/Theme.RecordMaintenance" />
 
-        <!-- Employee Profile Activity -->
         <activity
             android:name=".EmployeeProfileActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity"
             android:theme="@style/Theme.RecordMaintenance" />
 
-        <!-- Login Activity - Main Entry Point -->
         <activity
             android:name=".LoginActivity"
             android:exported="true"
@@ -57,14 +62,12 @@
             </intent-filter>
         </activity>
 
-        <!-- Add/Edit Employee Activity -->
         <activity
             android:name=".AddEditActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity"
             android:theme="@style/Theme.RecordMaintenance" />
 
-        <!-- Main Dashboard Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="false"

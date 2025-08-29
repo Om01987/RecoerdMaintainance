@@ -12,6 +12,13 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
+// Add these new imports
+import android.print.PrintAttributes;
+import android.print.PrintJob;
+import android.print.PrintManager;
+import android.content.Context;
+
+
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
@@ -34,6 +41,8 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     private static final int REQ_PICK_IMAGE = 501;
     private static final int REQ_CAPTURE_IMAGE = 502;
     private static final int REQ_PERMS = 1000;
+
+    private static final int REQ_CREATE_PROFILE_PDF = 1022;
 
     // UI Components
     private MaterialToolbar toolbar;
@@ -329,8 +338,21 @@ public class EmployeeProfileActivity extends AppCompatActivity {
             Toast.makeText(this, "Profile refreshed", Toast.LENGTH_SHORT).show();
             return true;
         }
+        // NEW: Handle profile PDF export
+        else if (id == R.id.action_export_profile_pdf) {
+            // Show options: Print dialog or Save as PDF
+            new AlertDialog.Builder(this)
+                    .setTitle("Export Profile as PDF")
+                    .setMessage("Choose export method:")
+                    .setPositiveButton("Print/Save as PDF", (dialog, which) -> exportProfileAsPdf())
+                    .setNegativeButton("Save to File", (dialog, which) -> exportProfileAsPdfToFile())
+                    .setNeutralButton("Cancel", null)
+                    .show();
+            return true;
+        }
         return super.onOptionsItemSelected(item);
     }
+
 
     private void showLogoutConfirmation() {
         new AlertDialog.Builder(this)
@@ -367,7 +389,81 @@ public class EmployeeProfileActivity extends AppCompatActivity {
             loadEmployeeData();
             Toast.makeText(this, "Password changed successfully", Toast.LENGTH_SHORT).show();
         }
+        // NEW: Handle profile PDF save result
+        else if (requestCode == REQ_CREATE_PROFILE_PDF && data != null && data.getData() != null) {
+            // Note: Direct PDF file creation is complex and would require additional PDF library
+            // For now, guide users to use the print dialog method
+            Toast.makeText(this, "Use 'Print/Save as PDF' option for full PDF functionality",
+                    Toast.LENGTH_LONG).show();
+        }
     }
+
+
+    /**
+     * NEW: Export profile as PDF using Android Print Framework
+     */
+    private void exportProfileAsPdf() {
+        if (currentEmployee == null) {
+            Toast.makeText(this, "No profile data to export", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            PrintManager printManager = (PrintManager) getSystemService(Context.PRINT_SERVICE);
+
+            String jobName = currentEmployee.getEmpName() + " Profile - " +
+                    new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                            .format(new java.util.Date());
+
+            ProfilePrintAdapter printAdapter = new ProfilePrintAdapter(this, currentEmployee, jobName);
+
+            // Create print attributes for better PDF output
+            PrintAttributes.Builder builder = new PrintAttributes.Builder()
+                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                    .setResolution(new PrintAttributes.Resolution("pdf", "PDF", 600, 600))
+                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS);
+
+            PrintJob printJob = printManager.print(jobName, printAdapter, builder.build());
+
+            if (printJob != null) {
+                Toast.makeText(this, "Opening print dialog...", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Failed to create print job", Toast.LENGTH_SHORT).show();
+            }
+
+        } catch (Exception e) {
+            Toast.makeText(this, "Error exporting PDF: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            android.util.Log.e("ProfilePDF", "Error in PDF export", e);
+        }
+    }
+
+    /**
+     * NEW: Save profile as PDF to chosen location
+     */
+    private void exportProfileAsPdfToFile() {
+        if (currentEmployee == null) {
+            Toast.makeText(this, "No profile data to export", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String suggestedName = currentEmployee.getEmpName().replaceAll("[^a-zA-Z0-9]", "-") +
+                "-Profile_" +
+                new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm", java.util.Locale.getDefault())
+                        .format(new java.util.Date()) +
+                ".pdf";
+
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/pdf");
+        intent.putExtra(Intent.EXTRA_TITLE, suggestedName);
+
+        try {
+            startActivityForResult(intent, REQ_CREATE_PROFILE_PDF);
+        } catch (Exception e) {
+            Toast.makeText(this, "File picker not available: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
 
     @Override
     protected void onDestroy() {

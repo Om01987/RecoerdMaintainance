@@ -14,6 +14,7 @@ cardview         = "1.0.0"
 lottie           = "6.4.0"
 circleimageview = "3.1.0"
 picasso = "2.8"
+photoview = "2.3.0"
 
 [libraries]
 junit            = { group = "junit",               name = "junit",             version.ref = "junit" }
@@ -28,6 +29,7 @@ cardview         = { module = "androidx.cardview:cardview",                     
 lottie           = { module = "com.airbnb.android:lottie",                       version.ref = "lottie" }
 circleimageview = { module = "de.hdodenhof:circleimageview", version.ref = "circleimageview" }
 picasso = { module = "com.squareup.picasso:picasso", version.ref = "picasso" }
+photoview = { group = "com.github.chrisbanes", name = "PhotoView", version.ref = "photoview" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
