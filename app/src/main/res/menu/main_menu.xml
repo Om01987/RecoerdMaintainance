@@ -8,42 +8,41 @@
         android:icon="@android:drawable/ic_menu_search"
         app:actionViewClass="androidx.appcompat.widget.SearchView"
         app:showAsAction="ifRoom|collapseActionView"
-        app:iconTint="@android:color/white" />
+        app:iconTint="@android:color/black" />
 
     <item
         android:id="@+id/action_filter_sort"
         android:title="Filter &amp; Sort"
         android:icon="@android:drawable/ic_menu_preferences"
-        app:showAsAction="ifRoom"
-        app:iconTint="@android:color/white" />
+        app:showAsAction="ifRoom|withText"
+        app:iconTint="@android:color/black" />
 
     <item
         android:id="@+id/action_refresh"
         android:title="Refresh"
         android:icon="@android:drawable/ic_popup_sync"
-        app:showAsAction="ifRoom"
-        app:iconTint="@android:color/white" />
+        app:showAsAction="ifRoom|withText"
+        app:iconTint="@android:color/black" />
 
-    <!-- Simplified Export Menu - Better visibility -->
     <item
         android:id="@+id/action_export_csv"
         android:title="Export CSV"
         android:icon="@android:drawable/ic_menu_save"
-        app:showAsAction="ifRoom"
-        app:iconTint="@android:color/white" />
+        app:showAsAction="ifRoom|withText"
+        app:iconTint="@android:color/black" />
 
     <item
         android:id="@+id/action_export_pdf"
         android:title="Export PDF"
         android:icon="@android:drawable/ic_menu_save"
-        app:showAsAction="ifRoom"
-        app:iconTint="@android:color/white" />
+        app:showAsAction="ifRoom|withText"
+        app:iconTint="@android:color/black" />
 
     <item
         android:id="@+id/action_logout"
         android:title="Logout"
         android:icon="@android:drawable/ic_lock_power_off"
-        app:showAsAction="never"
-        app:iconTint="@android:color/white" />
+        app:showAsAction="ifRoom|withText"
+        app:iconTint="@android:color/black" />
 
 </menu>

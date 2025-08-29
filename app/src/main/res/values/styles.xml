@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Overlay for toolbar to force dark action item text and icons -->
+    <style name="ToolbarThemeOverlay" parent="">
+        <item name="actionMenuTextColor">@android:color/black</item>
+        <item name="android:actionMenuTextColor">@android:color/black</item>
+        <item name="colorControlNormal">@android:color/black</item>
+    </style>
+</resources>

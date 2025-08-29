@@ -1,12 +1,12 @@
 package com.example.recordmaintenance;
 
-import static android.content.ContentValues.TAG;
-
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.ParcelFileDescriptor;
+import android.print.PrintAttributes;
+import android.print.PrintJob;
+import android.print.PrintManager;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -31,16 +31,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-import android.print.PrintAttributes;
-import android.print.PrintJob;
-import android.print.PrintManager;
-
 public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "MainActivity";
     private static final int REQUEST_ADD = 100;
     private static final int REQUEST_EDIT = 101;
-    private static final int REQ_CREATE_CSV = 1020; // NEW: CSV export request code
-    private static final int REQ_CREATE_PDF = 1021; // NEW: PDF export request code
-
+    private static final int REQ_CREATE_CSV = 1020; // CSV export request code
 
     // UI Components
     private MaterialToolbar toolbar;
@@ -395,7 +390,7 @@ public class MainActivity extends AppCompatActivity {
         tvLastUpdated.setText("Updated "+t);
     }
 
-    // ============= CSV EXPORT FUNCTIONALITY (NEW) =============
+    // ============= CSV EXPORT FUNCTIONALITY =============
 
     /**
      * Launches the system file picker for CSV creation
@@ -476,9 +471,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // ============= PDF EXPORT FUNCTIONALITY =============
+
     /**
-     * NEW: Export employee list as PDF using Android Print Framework
-     * Users can print directly or save as PDF
+     * Export employee list as PDF using Android Print Framework
+     * Users can print directly or save as PDF through the print dialog
      */
     private void exportListAsPdf() {
         List<Employee> employeesToExport = getEmployeesForExport();
@@ -505,7 +502,8 @@ public class MainActivity extends AppCompatActivity {
             PrintJob printJob = printManager.print(jobName, printAdapter, builder.build());
 
             if (printJob != null) {
-                Toast.makeText(this, "Opening print dialog...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Select 'Save as PDF' in the print dialog to save to your chosen location",
+                        Toast.LENGTH_LONG).show();
             } else {
                 Toast.makeText(this, "Failed to create print job", Toast.LENGTH_SHORT).show();
             }
@@ -516,60 +514,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * NEW: Alternative PDF export that saves directly to chosen location
-     */
-    private void exportListAsPdfToFile() {
-        String suggestedName = "Employee-List_" +
-                new SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault()).format(new Date()) +
-                ".pdf";
-
-        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("application/pdf");
-        intent.putExtra(Intent.EXTRA_TITLE, suggestedName);
-
-        try {
-            startActivityForResult(intent, REQ_CREATE_PDF);
-        } catch (Exception e) {
-            Toast.makeText(this, "File picker not available: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-    }
-
-    /**
-     * NEW: Create PDF directly to URI (for save-as functionality)
-     */
-    private void exportListPdfToUri(Uri uri) {
-        List<Employee> employeesToExport = getEmployeesForExport();
-
-        try (ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "w")) {
-            if (pfd == null) {
-                Toast.makeText(this, "Cannot open file for writing", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            String jobName = "Employee List - " +
-                    new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
-
-            ListPrintAdapter printAdapter = new ListPrintAdapter(this, employeesToExport, jobName);
-
-            // Create a mock layout to trigger PDF generation
-            PrintAttributes attributes = new PrintAttributes.Builder()
-                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                    .setResolution(new PrintAttributes.Resolution("pdf", "PDF", 600, 600))
-                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-                    .build();
-
-            // Note: This is a simplified direct PDF creation
-            // In production, you might want to use a more robust PDF library
-            Toast.makeText(this, "PDF export functionality requires print framework", Toast.LENGTH_LONG).show();
-
-        } catch (Exception e) {
-            Toast.makeText(this, "Export failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            Log.e(TAG, "Error exporting PDF to file", e);
-        }
-    }
-
+    // ============= MENU HANDLING =============
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -622,7 +567,7 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
 
-        // NEW: Handle CSV export action
+        // Handle CSV export action
         if (id == R.id.action_export_csv) {
             if (adapter == null || adapter.getFilteredCount() == 0) {
                 Toast.makeText(this, "No employees to export", Toast.LENGTH_SHORT).show();
@@ -631,23 +576,16 @@ public class MainActivity extends AppCompatActivity {
             }
             return true;
         }
-        // NEW: Handle PDF export action
+
+        // Handle PDF export action
         if (id == R.id.action_export_pdf) {
             if (adapter == null || adapter.getFilteredCount() == 0) {
                 Toast.makeText(this, "No employees to export", Toast.LENGTH_SHORT).show();
             } else {
-                // Show options: Print dialog or Save as PDF
-                new AlertDialog.Builder(this)
-                        .setTitle("Export as PDF")
-                        .setMessage("Choose export method:")
-                        .setPositiveButton("Print/Save as PDF", (dialog, which) -> exportListAsPdf())
-                        .setNegativeButton("Save to File", (dialog, which) -> exportListAsPdfToFile())
-                        .setNeutralButton("Cancel", null)
-                        .show();
+                exportListAsPdf(); // Direct call - opens print dialog
             }
             return true;
         }
-
 
         if (id == R.id.action_logout) {
             new AlertDialog.Builder(this)
@@ -681,18 +619,11 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // NEW: Handle CSV export result
+        // Handle CSV export result
         if (req == REQ_CREATE_CSV && res == RESULT_OK && data != null && data.getData() != null) {
             exportToUri(data.getData());
             return;
         }
-
-        // NEW: Handle PDF file creation result
-        if (req == REQ_CREATE_PDF && res == RESULT_OK && data != null && data.getData() != null) {
-            exportListPdfToUri(data.getData());
-            return;
-        }
-
     }
 
     @Override
