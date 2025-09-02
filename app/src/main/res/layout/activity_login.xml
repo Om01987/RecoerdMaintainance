@@ -115,7 +115,7 @@
         android:id="@+id/tvFooter"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Secure access • Admin / Employee"
+        android:text="All rights reserved @matraSoftech ."
         android:textColor="#B3FFFFFF"
         android:gravity="center"
         app:layout_constraintBottom_toBottomOf="parent"

@@ -20,7 +20,7 @@ import com.google.android.material.button.MaterialButton;
 
 public class LoginActivity extends AppCompatActivity {
 
-    private TextView tvRoleHeader;
+    private TextView tvRoleHeader;  // to show login page header according to build variant
     private TextInputLayout tilEmail, tilPassword;
     private TextInputEditText etEmail, etPassword;
     private MaterialButton btnLogin;
