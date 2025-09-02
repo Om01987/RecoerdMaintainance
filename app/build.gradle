@@ -1,5 +1,3 @@
-// app/build.gradle  (original)
-
 plugins {
     alias(libs.plugins.android.application)
 }
@@ -14,15 +12,25 @@ android {
         targetSdk 36
         versionCode 1
         versionName "1.0"
-
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
-        release {
+        debug {
+            // Debug builds: no shrinking or obfuscation
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+            shrinkResources false
+        }
+        release {
+            // Production builds: enable code & resource shrinking
+            minifyEnabled true
+            shrinkResources true
+
+            // Apply default optimized R8 rules + custom rules
+            proguardFiles(
+                    getDefaultProguardFile('proguard-android-optimize.txt'),
                     'proguard-rules.pro'
+            )
         }
     }
 
@@ -34,6 +42,16 @@ android {
     buildFeatures {
         viewBinding true
     }
+
+    packagingOptions {
+        // Prevent duplicate META-INF files from causing warnings
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/NOTICE.txt'
+        exclude 'META-INF/notice.txt'
+    }
 }
 
 dependencies {
@@ -44,8 +62,7 @@ dependencies {
     implementation libs.picasso
     implementation libs.photoview
 
-
-    testImplementation      libs.junit
+    testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
 }
