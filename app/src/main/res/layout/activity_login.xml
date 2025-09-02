@@ -33,47 +33,17 @@
         android:layout_margin="24dp"
         android:layout_marginTop="40dp">
 
-        <!-- Enhanced Toggle Group with Divider and Active States -->
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/toggleRole"
+        <!-- Replaced toggle group with styled header -->
+        <TextView
+            android:id="@+id/tvRoleHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:singleSelection="true"
-            app:selectionRequired="true"
-            android:layout_marginBottom="24dp">
+            android:layout_marginBottom="24dp"
+            android:gravity="center"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="20sp"
+            android:textStyle="bold"/>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnAdmin"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Admin"
-                android:textColor="@color/toggle_text_color"
-                app:strokeColor="?attr/colorPrimary"
-                app:strokeWidth="1dp"
-                app:backgroundTint="@color/toggle_background_color"
-                app:cornerRadius="8dp"/>
-
-            <!-- Vertical Divider -->
-            <View
-                android:layout_width="1dp"
-                android:layout_height="match_parent"
-                android:background="?attr/colorPrimary"
-                android:layout_marginTop="4dp"
-                android:layout_marginBottom="4dp"/>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnEmployee"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Employee"
-                android:textColor="@color/toggle_text_color"
-                app:strokeColor="?attr/colorPrimary"
-                app:strokeWidth="1dp"
-                app:backgroundTint="@color/toggle_background_color"
-                app:cornerRadius="8dp"/>
-        </com.google.android.material.button.MaterialButtonToggleGroup>
 
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/tilEmail"

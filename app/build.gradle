@@ -15,6 +15,26 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+
+
+    flavorDimensions "userType"
+
+    productFlavors {
+        admin {
+            dimension "userType"
+            applicationIdSuffix ".admin"
+            versionNameSuffix "-admin"
+            // Expose a build config field
+            buildConfigField "boolean", "IS_ADMIN", "true"
+        }
+        employee {
+            dimension "userType"
+            applicationIdSuffix ".employee"
+            versionNameSuffix "-employee"
+            buildConfigField "boolean", "IS_ADMIN", "false"
+        }
+    }
+
     buildTypes {
         debug {
             // Debug builds: no shrinking or obfuscation
@@ -39,8 +59,15 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+//    buildFeatures {
+//        viewBinding true
+//    }
+//
+//    buildFeatures { buildConfig true }
+
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 
     packagingOptions {
