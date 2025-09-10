@@ -1,3 +1,6 @@
+// settings.gradle
+import org.gradle.api.initialization.resolve.RepositoriesMode
+
 pluginManagement {
     repositories {
         google {
@@ -9,8 +12,16 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
+        // Add plugin-only maven repos here if a plugin needs them
+        // maven { url "https://jitpack.io" }
     }
+    // Not defining plugin versions here unless needed; versions can come from the version catalog or root plugins block. [16]
 }
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
@@ -21,4 +32,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "RecordMaintenance"
-include ':app'
+include(":app")

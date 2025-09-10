@@ -1,9 +1,15 @@
+// app/build.gradle (module)
+
 plugins {
+    // Use either alias or id, not both. We keep the alias to match your catalog. [16]
     alias(libs.plugins.android.application)
+
+    // Apply Google Services plugin
+    id "com.google.gms.google-services"
 }
 
 android {
-    namespace 'com.example.recordmaintenance'
+    namespace "com.example.recordmaintenance"
     compileSdk 36
 
     defaultConfig {
@@ -15,8 +21,6 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-
-
     flavorDimensions "userType"
 
     productFlavors {
@@ -24,7 +28,6 @@ android {
             dimension "userType"
             applicationIdSuffix ".admin"
             versionNameSuffix "-admin"
-            // Expose a build config field
             buildConfigField "boolean", "IS_ADMIN", "true"
         }
         employee {
@@ -37,19 +40,15 @@ android {
 
     buildTypes {
         debug {
-            // Debug builds: no shrinking or obfuscation
             minifyEnabled false
             shrinkResources false
         }
         release {
-            // Production builds: enable code & resource shrinking
             minifyEnabled true
             shrinkResources true
-
-            // Apply default optimized R8 rules + custom rules
             proguardFiles(
-                    getDefaultProguardFile('proguard-android-optimize.txt'),
-                    'proguard-rules.pro'
+                    getDefaultProguardFile("proguard-android-optimize.txt"),
+                    "proguard-rules.pro"
             )
         }
     }
@@ -59,11 +58,9 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-//    buildFeatures {
-//        viewBinding true
-//    }
-//
-//    buildFeatures { buildConfig true }
+    // If the project uses Kotlin sources, add:
+    // kotlinOptions { jvmTarget = "17" } and apply the Kotlin Android plugin at the top.
+    // Otherwise omit. [19]
 
     buildFeatures {
         viewBinding true
@@ -71,17 +68,19 @@ android {
     }
 
     packagingOptions {
-        // Prevent duplicate META-INF files from causing warnings
-        exclude 'META-INF/DEPENDENCIES'
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/LICENSE.txt'
-        exclude 'META-INF/NOTICE'
-        exclude 'META-INF/NOTICE.txt'
-        exclude 'META-INF/notice.txt'
+        exclude "META-INF/DEPENDENCIES"
+        exclude "META-INF/LICENSE"
+        exclude "META-INF/LICENSE.txt"
+        exclude "META-INF/NOTICE"
+        exclude "META-INF/NOTICE.txt"
+        exclude "META-INF/notice.txt"
     }
 }
 
 dependencies {
+    implementation platform(libs.firebase.bom)
+    implementation libs.firebase.analytics
+
     implementation libs.bundles.ui.core
     implementation libs.activity
     implementation libs.lottie
@@ -92,4 +91,9 @@ dependencies {
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
+
+    implementation libs.firebase.auth
+    implementation libs.firebase.firestore
+    implementation libs.firebase.storage
+
 }

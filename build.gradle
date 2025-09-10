@@ -1,4 +1,13 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+// build.gradle (Project/root)
+
+// Top-level build file: declare plugins only; repositories are centralized in settings.gradle. [6]
+
 plugins {
-alias(libs.plugins.android.application) apply false
+    // Android application plugin via version catalog (kept) [16]
+    alias(libs.plugins.android.application) apply false
+
+    // Google Services plugin declared here, applied in :app [16]
+    id "com.google.gms.google-services" version "4.4.3" apply false
 }
+
+// No repositories {}, no dependencies {}, no kotlin {} here. [6]
