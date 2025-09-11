@@ -19,6 +19,7 @@ lottie           = "6.4.0"
 circleimageview = "3.1.0"
 picasso = "2.8"
 photoview = "2.3.0"
+firebaseDatabase = "22.0.0"
 
 [libraries]
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
@@ -39,6 +40,7 @@ lottie           = { module = "com.airbnb.android:lottie",                      
 circleimageview = { module = "de.hdodenhof:circleimageview", version.ref = "circleimageview" }
 picasso = { module = "com.squareup.picasso:picasso", version.ref = "picasso" }
 photoview = { group = "com.github.chrisbanes", name = "PhotoView", version.ref = "photoview" }
+firebase-database = { group = "com.google.firebase", name = "firebase-database", version.ref = "firebaseDatabase" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
