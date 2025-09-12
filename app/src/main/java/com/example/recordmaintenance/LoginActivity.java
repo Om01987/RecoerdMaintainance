@@ -6,11 +6,11 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.util.Patterns;
 import android.view.View;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
+
 import androidx.appcompat.app.AppCompatActivity;
+
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.google.android.material.textfield.TextInputEditText;
@@ -20,31 +20,37 @@ public class LoginActivity extends AppCompatActivity {
 
     private static final String TAG = "LoginActivity";
 
-    // Match the XML IDs exactly
+    // Views
     private TextInputLayout tilEmail, tilPassword;
     private TextInputEditText etEmail, etPassword;
-    private TextView tvRoleHeader;
+    private TextView tvRoleHeader, tvForgot;
     private MaterialButton btnLogin;
-    private TextView tvForgot;
     private LinearProgressIndicator progress;
 
+    // Data
     private AuthRepository authRepository;
-    private boolean isAdminMode = true; // Default to admin mode
+
+    // Flavor-locked flag (set in build.gradle flavors)
+    private final boolean isAdminMode = BuildConfig.IS_ADMIN;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
+        // 1) Init views BEFORE any showLoading
+        initializeViews();
+
+        // 2) Init repository
         authRepository = new AuthRepository(this);
 
-        // Check if user is already signed in
+        // 3) If already signed in, show loader and fetch role
         if (authRepository.isUserSignedIn()) {
+            showLoading(true);
             getCurrentUserRoleAndRedirect();
-            return;
         }
 
-        initializeViews();
+        // 4) Normal UI setup
         setupClickListeners();
         updateUIForRole();
     }
@@ -52,8 +58,7 @@ public class LoginActivity extends AppCompatActivity {
     private void getCurrentUserRoleAndRedirect() {
         String currentUid = authRepository.getCurrentUserUid();
         if (currentUid != null) {
-            showLoading(true);
-
+            // Loader already shown in onCreate for auto-login path
             authRepository.getUserRole(currentUid, new AuthRepository.RoleCallback() {
                 @Override
                 public void onRoleRetrieved(String role, String empId) {
@@ -69,6 +74,8 @@ public class LoginActivity extends AppCompatActivity {
                     Toast.makeText(LoginActivity.this, "Please sign in again", Toast.LENGTH_SHORT).show();
                 }
             });
+        } else {
+            showLoading(false);
         }
     }
 
@@ -91,19 +98,17 @@ public class LoginActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
-        // Toggle between admin and employee with header tap
-        tvRoleHeader.setOnClickListener(v -> {
-            isAdminMode = !isAdminMode;
-            updateUIForRole();
-        });
+        // No role switching in flavor-locked build
     }
 
     private void updateUIForRole() {
         if (isAdminMode) {
             tvRoleHeader.setText("🔐 Admin Login");
             tilEmail.setHint("Admin Email");
-            etEmail.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
-                    android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+            etEmail.setInputType(
+                    android.text.InputType.TYPE_CLASS_TEXT |
+                            android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            );
         } else {
             tvRoleHeader.setText("👤 Employee Login");
             tilEmail.setHint("Employee ID or Email");
@@ -118,24 +123,17 @@ public class LoginActivity extends AppCompatActivity {
         String userInput = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
         String password = etPassword.getText() != null ? etPassword.getText().toString() : "";
 
-        if (!validateInputs(userInput, password)) {
-            return;
-        }
+        if (!validateInputs(userInput, password)) return;
 
         showLoading(true);
 
         if (isAdminMode) {
-            // Admin login - direct Firebase Auth
+            // Admin build variant - must be admin
             authRepository.signIn(userInput, password, new AuthRepository.AuthCallback() {
                 @Override
                 public void onSuccess(String role, String empId) {
                     showLoading(false);
-                    if ("admin".equals(role)) {
-                        redirectBasedOnRole(role, empId);
-                    } else {
-                        authRepository.signOut();
-                        showError("Access denied: Admin account required");
-                    }
+                    redirectBasedOnRole(role, empId);
                 }
 
                 @Override
@@ -145,19 +143,13 @@ public class LoginActivity extends AppCompatActivity {
                 }
             });
         } else {
-            // Employee login - can use empId or email
+            // Employee build variant - email or empId supported
             if (Patterns.EMAIL_ADDRESS.matcher(userInput).matches()) {
-                // Direct email login
                 authRepository.signIn(userInput, password, new AuthRepository.AuthCallback() {
                     @Override
                     public void onSuccess(String role, String empId) {
                         showLoading(false);
-                        if ("employee".equals(role)) {
-                            redirectBasedOnRole(role, empId);
-                        } else {
-                            authRepository.signOut();
-                            showError("Access denied: Employee account required");
-                        }
+                        redirectBasedOnRole(role, empId);
                     }
 
                     @Override
@@ -167,7 +159,7 @@ public class LoginActivity extends AppCompatActivity {
                     }
                 });
             } else {
-                // Employee ID login - need to find email first
+                // Resolve empId -> email, then login
                 EmployeeRepository empRepo = new EmployeeRepository(this);
                 empRepo.getEmployeeByEmpId(userInput, new EmployeeRepository.EmployeeCallback() {
                     @Override
@@ -176,12 +168,7 @@ public class LoginActivity extends AppCompatActivity {
                             @Override
                             public void onSuccess(String role, String empId) {
                                 showLoading(false);
-                                if ("employee".equals(role)) {
-                                    redirectBasedOnRole(role, empId);
-                                } else {
-                                    authRepository.signOut();
-                                    showError("Access denied: Employee account required");
-                                }
+                                redirectBasedOnRole(role, empId);
                             }
 
                             @Override
@@ -222,6 +209,18 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void redirectBasedOnRole(String role, String empId) {
+        // Enforce flavor-based access control
+        if (isAdminMode && !"admin".equals(role)) {
+            authRepository.signOut();
+            showError("Access denied: Admin app accepts only admin accounts");
+            return;
+        }
+        if (!isAdminMode && !"employee".equals(role)) {
+            authRepository.signOut();
+            showError("Access denied: Employee app accepts only employee accounts");
+            return;
+        }
+
         Intent intent;
         if ("admin".equals(role)) {
             intent = new Intent(this, MainActivity.class);
@@ -240,22 +239,14 @@ public class LoginActivity extends AppCompatActivity {
         finish();
     }
 
+    // Null-safe loading toggles to prevent early-call crashes
     private void showLoading(boolean loading) {
-        if (progress != null) {
-            progress.setVisibility(loading ? View.VISIBLE : View.GONE);
-        }
-
-        btnLogin.setEnabled(!loading);
-        etEmail.setEnabled(!loading);
-        etPassword.setEnabled(!loading);
-        tvRoleHeader.setEnabled(!loading);
-        tvForgot.setEnabled(!loading);
-
-        if (loading) {
-            btnLogin.setText("Signing in...");
-        } else {
-            btnLogin.setText("Log In");
-        }
+        if (progress != null) progress.setVisibility(loading ? View.VISIBLE : View.GONE);
+        if (btnLogin != null) btnLogin.setEnabled(!loading);
+        if (etEmail != null) etEmail.setEnabled(!loading);
+        if (etPassword != null) etPassword.setEnabled(!loading);
+        if (tvForgot != null) tvForgot.setEnabled(!loading);
+        if (btnLogin != null) btnLogin.setText(loading ? "Signing in..." : "Log In");
     }
 
     private void showError(String message) {
@@ -270,9 +261,7 @@ public class LoginActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        if (authRepository != null) {
-            authRepository.close();
-        }
+        if (authRepository != null) authRepository.close();
         super.onDestroy();
     }
 }
