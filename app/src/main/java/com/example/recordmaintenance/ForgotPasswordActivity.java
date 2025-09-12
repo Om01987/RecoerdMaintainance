@@ -113,7 +113,7 @@ public class ForgotPasswordActivity extends AppCompatActivity {
         tilEmpEmail.setVisibility(View.GONE);
         tilJoinedDate.setVisibility(View.GONE);
 
-        btnVerify.setText("Send Reset Instructions");
+        btnVerify.setText("Send Reset Email");
         clearAllFields();
     }
 
@@ -161,17 +161,25 @@ public class ForgotPasswordActivity extends AppCompatActivity {
 
         showLoading(true);
 
-        // Simulate network delay
-        btnVerify.postDelayed(() -> {
-            boolean adminExists = authRepository.adminExists(email);
-
-            if (adminExists) {
-                showAdminResetSuccessDialog(email);
-            } else {
-                tilAdminEmail.setError("No admin account found with this email address");
+        // Use Firebase Auth to send password reset email
+        authRepository.sendPasswordResetEmail(email, new AuthRepository.ResetCallback() {
+            @Override
+            public void onSuccess(String message) {
                 showLoading(false);
+                showAdminResetSuccessDialog(email);
             }
-        }, 1000);
+
+            @Override
+            public void onError(String error) {
+                showLoading(false);
+                // Check if it's a user-not-found error specifically
+                if (error.contains("user not found") || error.contains("no user record")) {
+                    tilAdminEmail.setError("No admin account found with this email address");
+                } else {
+                    tilAdminEmail.setError("Failed to send reset email: " + error);
+                }
+            }
+        });
     }
 
     private void attemptEmployeeVerification() {
@@ -187,17 +195,48 @@ public class ForgotPasswordActivity extends AppCompatActivity {
 
         showLoading(true);
 
-        // Simulate network delay
-        btnVerify.postDelayed(() -> {
-            Employee employee = verifyEmployeeDetails(empId, empEmail, joinedDate);
+        // Verify employee details using Firebase database
+        verifyEmployeeDetails(empId, empEmail, joinedDate);
+    }
 
-            if (employee != null) {
-                showEmployeeResetSuccessDialog(employee);
-            } else {
-                Toast.makeText(this, "Employee verification failed. Please check your details.", Toast.LENGTH_LONG).show();
-                showLoading(false);
+    private void verifyEmployeeDetails(String empId, String empEmail, String joinedDate) {
+        employeeRepository.getEmployeeByEmpId(empId, new EmployeeRepository.EmployeeCallback() {
+            @Override
+            public void onSuccess(Employee employee) {
+                // Verify email and joined date match
+                boolean emailMatches = empEmail.equalsIgnoreCase(employee.getEmpEmail());
+                boolean dateMatches = joinedDate.equals(employee.getJoinedDate());
+
+                if (emailMatches && dateMatches) {
+                    // Details verified, now send password reset email
+                    authRepository.sendPasswordResetEmail(employee.getEmpEmail(), new AuthRepository.ResetCallback() {
+                        @Override
+                        public void onSuccess(String message) {
+                            showLoading(false);
+                            showEmployeeResetSuccessDialog(employee);
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            showLoading(false);
+                            Toast.makeText(ForgotPasswordActivity.this,
+                                    "Failed to send reset email: " + error, Toast.LENGTH_LONG).show();
+                        }
+                    });
+                } else {
+                    showLoading(false);
+                    Toast.makeText(ForgotPasswordActivity.this,
+                            "Employee verification failed. Please check your details.", Toast.LENGTH_LONG).show();
+                }
             }
-        }, 1000);
+
+            @Override
+            public void onError(String error) {
+                showLoading(false);
+                Toast.makeText(ForgotPasswordActivity.this,
+                        "Employee ID not found", Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     private boolean validateAdminEmail(String email) {
@@ -238,22 +277,6 @@ public class ForgotPasswordActivity extends AppCompatActivity {
         return valid;
     }
 
-    private Employee verifyEmployeeDetails(String empId, String empEmail, String joinedDate) {
-        Employee employee = employeeRepository.getEmployeeByEmpId(empId);
-
-        if (employee != null) {
-            // Verify email and joined date match
-            boolean emailMatches = empEmail.equalsIgnoreCase(employee.getEmpEmail());
-            boolean dateMatches = joinedDate.equals(employee.getJoinedDate());
-
-            if (emailMatches && dateMatches) {
-                return employee;
-            }
-        }
-
-        return null;
-    }
-
     private void clearErrors() {
         tilAdminEmail.setError(null);
         tilEmpId.setError(null);
@@ -272,46 +295,31 @@ public class ForgotPasswordActivity extends AppCompatActivity {
     }
 
     private void showAdminResetSuccessDialog(String email) {
-        showLoading(false);
-
-        String message = "Password reset instructions have been sent to:\n\n" + email +
-                "\n\nFor demo purposes, you can proceed directly to reset your password.";
+        String message = "✅ Password reset email sent successfully!\n\n" +
+                "A password reset link has been sent to:\n" + email + "\n\n" +
+                "Please check your email and follow the instructions to reset your password.\n\n" +
+                "Note: The email may take a few minutes to arrive. Please also check your spam folder.";
 
         new AlertDialog.Builder(this)
-                .setTitle("✅ Reset Email Sent")
+                .setTitle("Reset Email Sent")
                 .setMessage(message)
-                .setPositiveButton("Reset Password", (dialog, which) -> {
-                    Intent intent = new Intent(this, ResetPasswordActivity.class);
-                    intent.putExtra("userType", "admin");
-                    intent.putExtra("email", email);
-                    startActivity(intent);
-                    finish();
-                })
-                .setNegativeButton("Back to Login", (dialog, which) -> finish())
+                .setPositiveButton("Back to Login", (dialog, which) -> finish())
                 .setCancelable(false)
                 .show();
     }
 
     private void showEmployeeResetSuccessDialog(Employee employee) {
-        showLoading(false);
-
-        String message = "✅ Employee Verified Successfully!\n\n" +
+        String message = "✅ Employee verified successfully!\n\n" +
                 "Employee: " + employee.getEmpName() + "\n" +
                 "ID: " + employee.getEmpId() + "\n\n" +
-                "You can now reset your password.";
+                "A password reset link has been sent to your registered email address:\n" +
+                employee.getEmpEmail() + "\n\n" +
+                "Please check your email and follow the instructions to reset your password.";
 
         new AlertDialog.Builder(this)
-                .setTitle("Verification Successful")
+                .setTitle("Reset Email Sent")
                 .setMessage(message)
-                .setPositiveButton("Reset Password", (dialog, which) -> {
-                    Intent intent = new Intent(this, ResetPasswordActivity.class);
-                    intent.putExtra("userType", "employee");
-                    intent.putExtra("empId", employee.getEmpId());
-                    intent.putExtra("empName", employee.getEmpName());
-                    startActivity(intent);
-                    finish();
-                })
-                .setNegativeButton("Back to Login", (dialog, which) -> finish())
+                .setPositiveButton("Back to Login", (dialog, which) -> finish())
                 .setCancelable(false)
                 .show();
     }

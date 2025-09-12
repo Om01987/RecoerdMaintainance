@@ -37,80 +37,50 @@ public class AddEditActivity extends AppCompatActivity {
 
     private MaterialButton btnSave;
     private EmployeeRepository repository;
+    private EmployeeCodeGenerator codeGenerator;
     private String mode;
-    private int mastCode;
+    private String employeeUid; // Firebase UID for edit mode
 
     private SharedPreferences customPrefs;
     private static final String CUSTOM_PREFS = "custom_dropdown_prefs";
     private static final String KEY_CUSTOM_DESIGNATIONS = "custom_designations";
     private static final String KEY_CUSTOM_DEPARTMENTS = "custom_departments";
 
-    // Standard dropdown options
+    // Standard dropdown options (keeping same as before)
     private String[] standardDesignations = {
-            // Software Engineering
             "Software Engineer", "Senior Software Engineer", "Lead Software Engineer", "Principal Engineer",
             "Software Developer", "Full Stack Developer", "Frontend Developer", "Backend Developer",
             "Mobile App Developer", "Web Developer", "Game Developer", "Embedded Software Engineer",
-
-            // Fresh Graduates & Trainees
             "Graduate Engineer Trainee", "Software Engineer Trainee", "Associate Software Engineer",
             "Junior Software Developer", "Intern - Software Development", "Management Trainee",
-
-            // DevOps & Infrastructure
             "DevOps Engineer", "Site Reliability Engineer (SRE)", "Cloud Engineer", "Platform Engineer",
             "Infrastructure Engineer", "Release Engineer", "Build Engineer", "Automation Engineer",
-
-            // Data & AI
             "Data Scientist", "Data Analyst", "Data Engineer", "ML Engineer", "AI Engineer",
             "Business Intelligence Analyst", "Big Data Architect", "Analytics Manager", "Data Architect",
-
-            // Quality & Testing
             "Quality Assurance Engineer", "Test Automation Engineer", "QA Lead", "Performance Test Engineer",
             "Security Test Engineer", "Manual Tester", "API Test Engineer",
-
-            // Management & Leadership
             "Engineering Manager", "Technical Lead", "Team Lead", "Product Manager", "Project Manager",
             "Scrum Master", "Agile Coach", "Director of Engineering", "VP Engineering", "CTO",
-
-            // Specialized Technical Roles
             "Cybersecurity Analyst", "Network Engineer", "Database Administrator", "System Administrator",
             "Solutions Architect", "Cloud Architect", "Security Architect", "Enterprise Architect",
-
-            // Design & User Experience
             "UX Designer", "UI Designer", "UX/UI Designer", "Product Designer", "Interaction Designer",
             "Visual Designer", "Design System Designer", "User Researcher",
-
-            // Business & Analytics
             "Business Analyst", "System Analyst", "Technical Writer", "Technical Documentation Specialist",
             "Business Intelligence Developer", "Product Owner", "Requirements Analyst",
-
-            // Sales & Customer Success
             "Sales Engineer", "Technical Sales Representative", "Customer Success Manager",
             "Solutions Consultant", "Pre-Sales Engineer", "Account Manager",
-
-            // Other
             "Other (Specify)"
     };
 
     private String[] standardDepartments = {
-            // Core Technical
             "Engineering", "Software Development", "Platform Engineering", "Infrastructure & DevOps",
             "Quality Assurance", "Data & Analytics", "Cybersecurity", "IT Operations",
-
-            // Product & Design
             "Product Management", "Product Design", "User Experience (UX)", "User Research",
-
-            // Business Functions
             "Human Resources", "Finance & Accounting", "Marketing", "Sales", "Customer Success",
             "Business Operations", "Legal & Compliance", "Procurement",
-
-            // Specialized
             "Research & Development", "Innovation Lab", "Technical Writing", "Training & Development",
             "Facilities Management", "Vendor Management", "Risk Management",
-
-            // Management
             "Executive Leadership", "Program Management", "Strategic Planning",
-
             "Other (Specify)"
     };
 
@@ -120,6 +90,7 @@ public class AddEditActivity extends AppCompatActivity {
         setContentView(R.layout.activity_add_edit);
 
         customPrefs = getSharedPreferences(CUSTOM_PREFS, MODE_PRIVATE);
+        codeGenerator = new EmployeeCodeGenerator(this);
 
         initializeViews();
         setupDropdowns();
@@ -130,9 +101,14 @@ public class AddEditActivity extends AppCompatActivity {
 
         mode = getIntent().getStringExtra("mode");
         if ("edit".equals(mode)) {
-            mastCode = getIntent().getIntExtra("mastCode", -1);
-            loadEmployee(mastCode);
-            setTitle("Edit Employee");
+            employeeUid = getIntent().getStringExtra("employeeUid"); // Changed from mastCode
+            if (employeeUid != null) {
+                loadEmployee(employeeUid);
+                setTitle("Edit Employee");
+            } else {
+                Toast.makeText(this, "Employee data not found", Toast.LENGTH_SHORT).show();
+                finish();
+            }
         } else {
             setTitle("Add New Employee");
         }
@@ -206,28 +182,16 @@ public class AddEditActivity extends AppCompatActivity {
     private List<String> getDesignationList() {
         Set<String> customDesignations = customPrefs.getStringSet(KEY_CUSTOM_DESIGNATIONS, new HashSet<>());
         List<String> allDesignations = new ArrayList<>();
-
-        // Add custom designations first (most recently used)
         allDesignations.addAll(customDesignations);
-
-        // Add standard designations
         allDesignations.addAll(Arrays.asList(standardDesignations));
-
-        // Remove duplicates while preserving order
         return new ArrayList<>(new HashSet<>(allDesignations));
     }
 
     private List<String> getDepartmentList() {
         Set<String> customDepartments = customPrefs.getStringSet(KEY_CUSTOM_DEPARTMENTS, new HashSet<>());
         List<String> allDepartments = new ArrayList<>();
-
-        // Add custom departments first
         allDepartments.addAll(customDepartments);
-
-        // Add standard departments
         allDepartments.addAll(Arrays.asList(standardDepartments));
-
-        // Remove duplicates while preserving order
         return new ArrayList<>(new HashSet<>(allDepartments));
     }
 
@@ -246,11 +210,11 @@ public class AddEditActivity extends AppCompatActivity {
                     if (!TextUtils.isEmpty(custom)) {
                         addCustomDesignation(custom);
                         spinnerDesignation.setText(custom);
-                        setupDesignationDropdown(); // Refresh dropdown
+                        setupDesignationDropdown();
                     }
                 })
                 .setNegativeButton("Cancel", (dialog, which) -> {
-                    spinnerDesignation.setText(""); // Clear selection
+                    spinnerDesignation.setText("");
                 })
                 .show();
     }
@@ -270,11 +234,11 @@ public class AddEditActivity extends AppCompatActivity {
                     if (!TextUtils.isEmpty(custom)) {
                         addCustomDepartment(custom);
                         spinnerDepartment.setText(custom);
-                        setupDepartmentDropdown(); // Refresh dropdown
+                        setupDepartmentDropdown();
                     }
                 })
                 .setNegativeButton("Cancel", (dialog, which) -> {
-                    spinnerDepartment.setText(""); // Clear selection
+                    spinnerDepartment.setText("");
                 })
                 .show();
     }
@@ -312,33 +276,45 @@ public class AddEditActivity extends AppCompatActivity {
         datePicker.show(getSupportFragmentManager(), "DATE_PICKER");
     }
 
-    private void loadEmployee(int mastCode) {
-        for (Employee emp : repository.getAllEmployees()) {
-            if (emp.getMastCode() == mastCode) {
-                etEmpID.setText(emp.getEmpId());
-                etEmpName.setText(emp.getEmpName());
-                etEmail.setText(emp.getEmpEmail());
-                spinnerDesignation.setText(emp.getDesignation());
-                spinnerDepartment.setText(emp.getDepartment());
-                etJoinedDate.setText(emp.getJoinedDate());
-                etSalary.setText(String.valueOf(emp.getSalary()));
-                etAddress1.setText(emp.getAddressLine1());
-                etAddress2.setText(emp.getAddressLine2());
-                etCity.setText(emp.getCity());
-                etState.setText(emp.getState());
-                etCountry.setText(emp.getCountry());
-
-                // Show actual employee ID for edit mode
-                tilEmpID.setHint("Employee ID");
-                break;
+    private void loadEmployee(String uid) {
+        repository.getEmployeeByUid(uid, new EmployeeRepository.EmployeeCallback() {
+            @Override
+            public void onSuccess(Employee employee) {
+                runOnUiThread(() -> {
+                    displayEmployeeData(employee);
+                });
             }
-        }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(AddEditActivity.this, "Failed to load employee: " + error, Toast.LENGTH_LONG).show();
+                    finish();
+                });
+            }
+        });
+    }
+
+    private void displayEmployeeData(Employee employee) {
+        etEmpID.setText(employee.getEmpId());
+        etEmpName.setText(employee.getEmpName());
+        etEmail.setText(employee.getEmpEmail());
+        spinnerDesignation.setText(employee.getDesignation());
+        spinnerDepartment.setText(employee.getDepartment());
+        etJoinedDate.setText(employee.getJoinedDate());
+        etSalary.setText(String.valueOf(employee.getSalary()));
+        etAddress1.setText(employee.getAddressLine1());
+        etAddress2.setText(employee.getAddressLine2());
+        etCity.setText(employee.getCity());
+        etState.setText(employee.getState());
+        etCountry.setText(employee.getCountry());
+
+        tilEmpID.setHint("Employee ID");
     }
 
     private void saveEmployee() {
         clearErrors();
 
-        // Validate required fields
         if (!validateInputs()) {
             return;
         }
@@ -346,33 +322,46 @@ public class AddEditActivity extends AppCompatActivity {
         Employee emp = createEmployeeFromInputs();
 
         if ("add".equals(mode)) {
-            // Validate before insertion
-            EmployeeRepository.ValidationResult validation = repository.validateEmployeeData(emp);
-            if (!validation.isValid()) {
-                showValidationErrors(validation);
-                return;
-            }
+            // Generate temporary password
+            String tempPassword = EmployeeCodeGenerator.generateInitialPassword(emp.getEmpName(),
+                    codeGenerator.generateEmployeeCode());
 
-            // Insert employee with auto-generated code and password
-            EmployeeRepository.InsertResult result = repository.insertEmployee(emp);
+            // Create employee in Firebase
+            repository.createEmployee(emp, tempPassword, new EmployeeRepository.CreateEmployeeCallback() {
+                @Override
+                public void onSuccess(String empId, String generatedPassword) {
+                    runOnUiThread(() -> {
+                        showSuccessDialog(empId, generatedPassword);
+                    });
+                }
 
-            if (result.isSuccess()) {
-                showSuccessDialog(result);
-            } else {
-                Toast.makeText(this, result.getMessage(), Toast.LENGTH_LONG).show();
-            }
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(AddEditActivity.this, "Failed to create employee: " + error, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
         } else {
             // Update existing employee
-            emp.setMastCode(mastCode);
-            int result = repository.updateEmployee(emp);
+            emp.setUid(employeeUid);
+            repository.updateEmployee(emp, new EmployeeRepository.UpdateCallback() {
+                @Override
+                public void onSuccess(String message) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(AddEditActivity.this, message, Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_OK);
+                        finish();
+                    });
+                }
 
-            if (result > 0) {
-                Toast.makeText(this, "Employee updated successfully", Toast.LENGTH_SHORT).show();
-                setResult(RESULT_OK);
-                finish();
-            } else {
-                Toast.makeText(this, "Failed to update employee", Toast.LENGTH_SHORT).show();
-            }
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(AddEditActivity.this, "Failed to update employee: " + error, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
         }
     }
 
@@ -422,6 +411,7 @@ public class AddEditActivity extends AppCompatActivity {
         emp.setDesignation(spinnerDesignation.getText().toString().trim());
         emp.setDepartment(spinnerDepartment.getText().toString().trim());
         emp.setJoinedDate(etJoinedDate.getText().toString().trim());
+        emp.setRole("employee"); // Set role for new employees
 
         try {
             emp.setSalary(Double.parseDouble(etSalary.getText().toString().trim()));
@@ -438,30 +428,25 @@ public class AddEditActivity extends AppCompatActivity {
         return emp;
     }
 
-    private void showValidationErrors(EmployeeRepository.ValidationResult validation) {
-        StringBuilder errors = new StringBuilder();
-        for (String error : validation.getErrors()) {
-            errors.append("• ").append(error).append("\n");
-        }
+    private void showSuccessDialog(String empId, String generatedPassword) {
+        String message = "✅ Employee created successfully!\n\n" +
+                "Employee ID: " + empId + "\n" +
+                "Initial Password: " + generatedPassword + "\n\n" +
+                "⚠️ Please share these credentials with the employee securely.\n" +
+                "The employee can change this password after logging in.";
 
         new AlertDialog.Builder(this)
-                .setTitle("Validation Error")
-                .setMessage(errors.toString())
-                .setPositiveButton("OK", null)
-                .show();
-    }
-
-    private void showSuccessDialog(EmployeeRepository.InsertResult result) {
-        String message = "Employee added successfully!\n\n" +
-                "Employee ID: " + result.getEmpId() + "\n" +
-                "Initial Password: " + result.getGeneratedPassword() + "\n\n" +
-                "⚠️ Please share these credentials with the employee securely. " +
-                "They can change their password after first login.";
-
-        new AlertDialog.Builder(this)
-                .setTitle("✅ Success")
+                .setTitle("Employee Created")
                 .setMessage(message)
                 .setPositiveButton("OK", (dialog, which) -> {
+                    setResult(RESULT_OK);
+                    finish();
+                })
+                .setNeutralButton("Copy Password", (dialog, which) -> {
+                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                    android.content.ClipData clip = android.content.ClipData.newPlainText("Employee Password", generatedPassword);
+                    clipboard.setPrimaryClip(clip);
+                    Toast.makeText(this, "Password copied to clipboard", Toast.LENGTH_SHORT).show();
                     setResult(RESULT_OK);
                     finish();
                 })

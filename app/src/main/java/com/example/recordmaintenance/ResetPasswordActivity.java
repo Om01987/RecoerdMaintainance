@@ -25,33 +25,18 @@ public class ResetPasswordActivity extends AppCompatActivity {
     private LinearProgressIndicator progress;
 
     private AuthRepository authRepository;
-    private EmployeeRepository employeeRepository;
 
-    private String userType;
-    private String userEmail;
-    private String empId;
-    private String empName;
+    private String userType; // "admin" or "employee" (for title only)
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_reset_password);
 
-        // Get intent data
+        // Intent data (optional, used for title only)
         userType = getIntent().getStringExtra("userType");
-        userEmail = getIntent().getStringExtra("email");
-        empId = getIntent().getStringExtra("empId");
-        empName = getIntent().getStringExtra("empName");
-
-        if (userType == null) {
-            Toast.makeText(this, "Invalid reset request", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
 
         authRepository = new AuthRepository(this);
-        employeeRepository = new EmployeeRepository(this);
-        employeeRepository.open();
 
         initializeViews();
         setupToolbar();
@@ -77,13 +62,11 @@ public class ResetPasswordActivity extends AppCompatActivity {
     }
 
     private void updateUIForUserType() {
-        if ("admin".equals(userType)) {
-            if (getSupportActionBar() != null) {
+        if (getSupportActionBar() != null) {
+            if ("admin".equals(userType)) {
                 getSupportActionBar().setTitle("Reset Admin Password");
-            }
-        } else if ("employee".equals(userType)) {
-            if (getSupportActionBar() != null) {
-                getSupportActionBar().setTitle("Reset Employee Password");
+            } else {
+                getSupportActionBar().setTitle("Reset Password");
             }
         }
     }
@@ -104,29 +87,33 @@ public class ResetPasswordActivity extends AppCompatActivity {
 
         showLoading(true);
 
-        // Simulate network delay
-        btnUpdatePassword.postDelayed(() -> {
-            boolean success = false;
-
-            if ("admin".equals(userType)) {
-                success = authRepository.updateAdminPassword(userEmail, newPassword);
-            } else if ("employee".equals(userType)) {
-                success = employeeRepository.changeEmployeePassword(empId, newPassword);
-            }
-
-            if (success) {
+        // Only the currently signed-in user can change their own password on client
+        authRepository.updatePassword(newPassword, new AuthRepository.UpdateCallback() {
+            @Override
+            public void onSuccess(String message) {
                 showSuccessDialog();
-            } else {
-                showLoading(false);
-                Toast.makeText(this, "Failed to update password. Please try again.", Toast.LENGTH_SHORT).show();
             }
-        }, 1000);
+
+            @Override
+            public void onError(String error) {
+                showLoading(false);
+                // If recent login is required, guide the user to ChangePasswordActivity (with re-auth)
+                if (error != null && error.toLowerCase().contains("requires recent")) {
+                    Toast.makeText(ResetPasswordActivity.this,
+                            "For security, please re-authenticate to change your password.",
+                            Toast.LENGTH_LONG).show();
+                    startActivity(new Intent(ResetPasswordActivity.this, ChangePasswordActivity.class));
+                } else {
+                    Toast.makeText(ResetPasswordActivity.this,
+                            "Failed to update password: " + error, Toast.LENGTH_LONG).show();
+                }
+            }
+        });
     }
 
     private boolean validatePasswords(String password, String confirmPassword) {
         boolean valid = true;
 
-        // Validate new password
         if (TextUtils.isEmpty(password)) {
             tilNewPassword.setError("New password is required");
             valid = false;
@@ -138,7 +125,6 @@ public class ResetPasswordActivity extends AppCompatActivity {
             valid = false;
         }
 
-        // Validate confirm password
         if (TextUtils.isEmpty(confirmPassword)) {
             tilConfirmPassword.setError("Please confirm your new password");
             valid = false;
@@ -150,18 +136,11 @@ public class ResetPasswordActivity extends AppCompatActivity {
         return valid;
     }
 
-    /**
-     * Check if password meets strong password criteria
-     */
     private boolean isPasswordStrong(String password) {
-        if (password == null || password.length() < 6) {
-            return false;
-        }
-
+        if (password == null || password.length() < 6) return false;
         boolean hasUpper = password.matches(".*[A-Z].*");
         boolean hasLower = password.matches(".*[a-z].*");
         boolean hasDigit = password.matches(".*\\d.*");
-
         return hasUpper && hasLower && hasDigit;
     }
 
@@ -179,24 +158,11 @@ public class ResetPasswordActivity extends AppCompatActivity {
 
     private void showSuccessDialog() {
         showLoading(false);
-
-        String message;
-        if ("admin".equals(userType)) {
-            message = "✅ Admin Password Updated Successfully!\n\n" +
-                    "Your admin password has been updated securely.\n" +
-                    "You can now login with your new password.";
-        } else {
-            message = "✅ Employee Password Updated Successfully!\n\n" +
-                    "Hello " + (empName != null ? empName : "Employee") + "!\n\n" +
-                    "Your password has been updated securely.\n" +
-                    "You can now login with your new password.";
-        }
-
+        String message = "✅ Password Updated Successfully!\n\nYou can now login with your new password.";
         new AlertDialog.Builder(this)
                 .setTitle("Password Reset Complete")
                 .setMessage(message)
                 .setPositiveButton("Login Now", (dialog, which) -> {
-                    // Navigate back to login screen
                     Intent intent = new Intent(this, LoginActivity.class);
                     intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                     startActivity(intent);
@@ -217,12 +183,7 @@ public class ResetPasswordActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        if (authRepository != null) {
-            authRepository.close();
-        }
-        if (employeeRepository != null) {
-            employeeRepository.close();
-        }
+        if (authRepository != null) authRepository.close();
         super.onDestroy();
     }
 }

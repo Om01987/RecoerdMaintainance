@@ -32,7 +32,7 @@ android {
         }
         employee {
             dimension "userType"
-            applicationIdSuffix ".employee"
+//            applicationIdSuffix ".employee"
             versionNameSuffix "-employee"
             buildConfigField "boolean", "IS_ADMIN", "false"
         }
@@ -98,3 +98,5 @@ dependencies {
     implementation libs.firebase.storage
 
 }
+
+

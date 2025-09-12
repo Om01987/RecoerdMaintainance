@@ -1,15 +1,16 @@
 {
   "project_info": {
     "project_number": "267670926377",
+    "firebase_url": "https://record-maintainance-app-default-rtdb.firebaseio.com",
     "project_id": "record-maintainance-app",
     "storage_bucket": "record-maintainance-app.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:267670926377:android:5b6dd756d4700fdd059838",
+        "mobilesdk_app_id": "1:267670926377:android:6bdc951860f3d9b5059838",
         "android_client_info": {
-          "package_name": "com.example.recordmaintenance.admin"
+          "package_name": "com.example.recordmaintenance"
         }
       },
       "oauth_client": [],
@@ -26,9 +27,9 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:267670926377:android:91a8161a39c099a6059838",
+        "mobilesdk_app_id": "1:267670926377:android:5b6dd756d4700fdd059838",
         "android_client_info": {
-          "package_name": "com.example.recordmaintenance.employee"
+          "package_name": "com.example.recordmaintenance.admin"
         }
       },
       "oauth_client": [],

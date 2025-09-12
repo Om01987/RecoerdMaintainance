@@ -35,7 +35,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final int REQUEST_ADD = 100;
     private static final int REQUEST_EDIT = 101;
-    private static final int REQ_CREATE_CSV = 1020; // CSV export request code
+    private static final int REQ_CREATE_CSV = 1020;
 
     // UI Components
     private MaterialToolbar toolbar;
@@ -50,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
 
     // Data Components
     private EmployeeRepository repository;
+    private AuthRepository authRepository;
     private EmployeeAdapter adapter;
     private String currentRole;
     private String currentEmployeeId;
@@ -63,13 +64,15 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Initialize data
+        // Initialize repositories
+        repository = new EmployeeRepository(this);
+        authRepository = new AuthRepository(this);
+        repository.open();
+
+        // Get current role from intent (fallback to admin)
         currentRole = getIntent().getStringExtra("role");
         currentEmployeeId = getIntent().getStringExtra("employeeId");
         if (currentRole == null) currentRole = "admin";
-
-        repository = new EmployeeRepository(this);
-        repository.open();
 
         // Initialize UI
         initializeViews();
@@ -79,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
         setupQuickAdd();
         setupSearchAndFilter();
 
-        // Employee redirect
+        // Employee redirect (should not happen with new auth flow, but keeping as safety)
         if ("employee".equals(currentRole)) {
             redirectEmployeeToProfile();
             return;
@@ -155,19 +158,49 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadEmployeeData() {
-        List<Employee> list = repository.getAllEmployees();
-        if (list.isEmpty()) {
+        // Show loading state
+        emptyStateLayout.setVisibility(View.GONE);
+        recyclerView.setVisibility(View.GONE);
+
+        // Load employees from Firebase
+        repository.getAllEmployees(new EmployeeRepository.EmployeeListCallback() {
+            @Override
+            public void onSuccess(List<Employee> employees) {
+                // Update UI on main thread
+                runOnUiThread(() -> {
+                    displayEmployees(employees);
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                // Handle error on main thread
+                runOnUiThread(() -> {
+                    Log.e(TAG, "Failed to load employees: " + error);
+                    Toast.makeText(MainActivity.this, "Failed to load employees: " + error, Toast.LENGTH_LONG).show();
+
+                    // Show empty state
+                    emptyStateLayout.setVisibility(View.VISIBLE);
+                    recyclerView.setVisibility(View.GONE);
+                });
+            }
+        });
+    }
+
+    private void displayEmployees(List<Employee> employees) {
+        if (employees.isEmpty()) {
             emptyStateLayout.setVisibility(View.VISIBLE);
             recyclerView.setVisibility(View.GONE);
         } else {
             emptyStateLayout.setVisibility(View.GONE);
             recyclerView.setVisibility(View.VISIBLE);
+
             if (adapter == null) {
-                adapter = new EmployeeAdapter(this, list);
+                adapter = new EmployeeAdapter(this, employees);
                 setupAdapterClickListeners();
                 recyclerView.setAdapter(adapter);
             } else {
-                adapter.updateList(list);
+                adapter.updateList(employees);
             }
         }
         updateFilterStatus();
@@ -179,7 +212,7 @@ public class MainActivity extends AppCompatActivity {
             public void onEditClick(Employee e, int pos) {
                 Intent i = new Intent(MainActivity.this, AddEditActivity.class);
                 i.putExtra("mode","edit");
-                i.putExtra("mastCode",e.getMastCode());
+                i.putExtra("employeeUid", e.getUid()); // Use Firebase UID instead of mastCode
                 startActivityForResult(i,REQUEST_EDIT);
             }
 
@@ -189,9 +222,7 @@ public class MainActivity extends AppCompatActivity {
                         .setTitle("Delete "+e.getEmpName()+"?")
                         .setMessage("Are you sure you want to delete this employee?\n\nThis action cannot be undone.")
                         .setPositiveButton("Delete",(d,w)-> {
-                            repository.deleteEmployee(e.getMastCode());
-                            loadEmployeeData();
-                            Toast.makeText(MainActivity.this, "Employee deleted successfully", Toast.LENGTH_SHORT).show();
+                            deleteEmployee(e);
                         })
                         .setNegativeButton("Cancel",null)
                         .setIcon(android.R.drawable.ic_dialog_alert)
@@ -205,9 +236,26 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void showEmployeeDetailsDialog(Employee employee) {
-        String plainPassword = repository.getEmployeePassword(employee.getEmpId());
+    private void deleteEmployee(Employee employee) {
+        repository.deleteEmployee(employee.getUid(), new EmployeeRepository.DeleteCallback() {
+            @Override
+            public void onSuccess(String message) {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                    loadEmployeeData(); // Refresh the list
+                });
+            }
 
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "Failed to delete employee: " + error, Toast.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    private void showEmployeeDetailsDialog(Employee employee) {
         StringBuilder details = new StringBuilder();
         details.append("👤 Employee Details\n\n");
         details.append("ID: ").append(employee.getEmpId() != null ? employee.getEmpId() : "N/A").append("\n");
@@ -225,91 +273,18 @@ public class MainActivity extends AppCompatActivity {
         details.append("State: ").append(employee.getState() != null ? employee.getState() : "N/A").append("\n");
         details.append("Country: ").append(employee.getCountry() != null ? employee.getCountry() : "N/A").append("\n\n");
 
-        details.append("🔐 Login Credentials\n\n");
+        details.append("🔐 Account Status\n\n");
         details.append("Employee ID: ").append(employee.getEmpId()).append("\n");
-        details.append("Current Password: ").append(getPasswordDisplayText(plainPassword)).append("\n");
         details.append("Password Status: ").append(employee.isPasswordChanged() ? "Changed by employee" : "Initial password");
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this)
-                .setTitle("Employee Login Credentials")
+                .setTitle("Employee Details")
                 .setMessage(details.toString())
                 .setPositiveButton("Close", null);
 
-        if ("PASSWORD_CHANGED_BY_EMPLOYEE".equals(plainPassword)) {
-            builder.setNegativeButton("Reset Password", (dialog, which) -> {
-                showResetPasswordConfirmation(employee);
-            });
-        } else if (isPasswordCopyable(plainPassword)) {
-            builder.setNeutralButton("Copy Password", (dialog, which) -> {
-                copyPasswordToClipboard(plainPassword);
-            });
-        }
-
+        // Note: Password viewing/reset functionality would need to be implemented
+        // with Firebase Admin SDK or Cloud Functions for security
         builder.show();
-    }
-
-    private String getPasswordDisplayText(String plainPassword) {
-        if (plainPassword == null || "EMPLOYEE_NOT_FOUND".equals(plainPassword)) {
-            return "Not available";
-        } else if ("PASSWORD_CHANGED_BY_EMPLOYEE".equals(plainPassword)) {
-            return "Changed by employee (not viewable)";
-        } else {
-            return plainPassword;
-        }
-    }
-
-    private boolean isPasswordCopyable(String plainPassword) {
-        return plainPassword != null &&
-                !plainPassword.equals("EMPLOYEE_NOT_FOUND") &&
-                !plainPassword.equals("PASSWORD_CHANGED_BY_EMPLOYEE") &&
-                !plainPassword.contains("not viewable") &&
-                !plainPassword.contains("Not available");
-    }
-
-    private void copyPasswordToClipboard(String password) {
-        android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(android.content.Context.CLIPBOARD_SERVICE);
-        android.content.ClipData clip = android.content.ClipData.newPlainText("Employee Password", password);
-        clipboard.setPrimaryClip(clip);
-        Toast.makeText(this, "Password copied to clipboard", Toast.LENGTH_SHORT).show();
-    }
-
-    private void showResetPasswordConfirmation(Employee employee) {
-        new AlertDialog.Builder(this)
-                .setTitle("Reset Password")
-                .setMessage("Reset password for " + employee.getEmpName() + "?\n\nThis will generate a new initial password that you can share with the employee. The employee will be able to change it after logging in.")
-                .setPositiveButton("Reset", (dialog, which) -> {
-                    String newPassword = repository.resetEmployeePassword(employee.getEmpId());
-                    if (newPassword != null) {
-                        showNewPasswordDialog(employee, newPassword);
-                    } else {
-                        Toast.makeText(this, "Failed to reset password", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .setIcon(android.R.drawable.ic_lock_power_off)
-                .show();
-    }
-
-    private void showNewPasswordDialog(Employee employee, String newPassword) {
-        String message = "✅ Password Reset Successfully!\n\n" +
-                "Employee: " + employee.getEmpName() + "\n" +
-                "Employee ID: " + employee.getEmpId() + "\n" +
-                "New Password: " + newPassword + "\n\n" +
-                "⚠️ Please share these credentials with the employee securely.\n" +
-                "The employee can change this password after logging in.";
-
-        new AlertDialog.Builder(this)
-                .setTitle("New Password Generated")
-                .setMessage(message)
-                .setPositiveButton("OK", (dialog, which) -> {
-                    loadEmployeeData();
-                })
-                .setNeutralButton("Copy Password", (dialog, which) -> {
-                    copyPasswordToClipboard(newPassword);
-                    loadEmployeeData();
-                })
-                .setCancelable(false)
-                .show();
     }
 
     private void showFilterSortDialog() {
@@ -343,9 +318,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public List<String> getDepartmentList() {
                 Set<String> departments = new HashSet<>();
-                for (Employee emp : repository.getAllEmployees()) {
-                    if (emp.getDepartment() != null && !emp.getDepartment().trim().isEmpty()) {
-                        departments.add(emp.getDepartment());
+                if (adapter != null) {
+                    List<Employee> employees = adapter.getCurrentItems();
+                    for (Employee emp : employees) {
+                        if (emp.getDepartment() != null && !emp.getDepartment().trim().isEmpty()) {
+                            departments.add(emp.getDepartment());
+                        }
                     }
                 }
                 return new ArrayList<>(departments);
@@ -354,9 +332,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public List<String> getDesignationList() {
                 Set<String> designations = new HashSet<>();
-                for (Employee emp : repository.getAllEmployees()) {
-                    if (emp.getDesignation() != null && !emp.getDesignation().trim().isEmpty()) {
-                        designations.add(emp.getDesignation());
+                if (adapter != null) {
+                    List<Employee> employees = adapter.getCurrentItems();
+                    for (Employee emp : employees) {
+                        if (emp.getDesignation() != null && !emp.getDesignation().trim().isEmpty()) {
+                            designations.add(emp.getDesignation());
+                        }
                     }
                 }
                 return new ArrayList<>(designations);
@@ -391,20 +372,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ============= CSV EXPORT FUNCTIONALITY =============
-
-    /**
-     * Launches the system file picker for CSV creation
-     * Uses ACTION_CREATE_DOCUMENT to let user choose filename and location
-     */
     private void launchCreateCsvDocument() {
-        // Generate suggested filename with timestamp
         String suggestedName = "Employees_" +
                 new SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault()).format(new Date()) +
                 ".csv";
 
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("text/csv"); // Correct MIME type for CSV files
+        intent.setType("text/csv");
         intent.putExtra(Intent.EXTRA_TITLE, suggestedName);
 
         try {
@@ -414,69 +389,45 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * Gets the list of employees to export
-     * Prioritizes the currently displayed/filtered list from adapter
-     */
     private List<Employee> getEmployeesForExport() {
         if (adapter != null) {
             try {
-                // Export exactly what's shown after filters/search
                 return adapter.getCurrentItems();
             } catch (Exception e) {
-                // Fallback to repository if adapter method fails
-                return repository.getAllEmployees();
+                return new ArrayList<>();
             }
         }
-        return repository.getAllEmployees();
+        return new ArrayList<>();
     }
 
-    /**
-     * Exports employee data to the selected URI as CSV
-     * @param uri The Uri from ACTION_CREATE_DOCUMENT result
-     */
     private void exportToUri(Uri uri) {
         OutputStream outputStream = null;
         try {
-            // Open output stream for writing
             outputStream = getContentResolver().openOutputStream(uri, "w");
             if (outputStream == null) {
                 Toast.makeText(this, "Cannot open file for writing", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            // Get employees to export
             List<Employee> employeesToExport = getEmployeesForExport();
-
-            // Write CSV using utility class
             CsvUtils.writeEmployeesToCsv(outputStream, employeesToExport);
 
-            // Success feedback
             String message = "Successfully exported " + employeesToExport.size() + " employee(s) to CSV";
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
 
         } catch (Exception e) {
-            // Error feedback
             Toast.makeText(this, "Export failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
         } finally {
-            // Always close the stream
             if (outputStream != null) {
                 try {
                     outputStream.close();
-                } catch (Exception ignore) {
-                    // Ignore close errors
-                }
+                } catch (Exception ignore) {}
             }
         }
     }
 
     // ============= PDF EXPORT FUNCTIONALITY =============
-
-    /**
-     * Export employee list as PDF using Android Print Framework
-     * Users can print directly or save as PDF through the print dialog
-     */
     private void exportListAsPdf() {
         List<Employee> employeesToExport = getEmployeesForExport();
 
@@ -487,13 +438,10 @@ public class MainActivity extends AppCompatActivity {
 
         try {
             PrintManager printManager = (PrintManager) getSystemService(Context.PRINT_SERVICE);
-
             String jobName = "Employee List - " +
                     new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
 
             ListPrintAdapter printAdapter = new ListPrintAdapter(this, employeesToExport, jobName);
-
-            // Create print attributes for better PDF output
             PrintAttributes.Builder builder = new PrintAttributes.Builder()
                     .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
                     .setResolution(new PrintAttributes.Resolution("pdf", "PDF", 600, 600))
@@ -515,12 +463,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ============= MENU HANDLING =============
-
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main_menu, menu);
 
-        // Setup search view
         MenuItem searchItem = menu.findItem(R.id.action_search);
         if (searchItem != null) {
             searchView = (SearchView) searchItem.getActionView();
@@ -567,7 +513,6 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
 
-        // Handle CSV export action
         if (id == R.id.action_export_csv) {
             if (adapter == null || adapter.getFilteredCount() == 0) {
                 Toast.makeText(this, "No employees to export", Toast.LENGTH_SHORT).show();
@@ -577,12 +522,11 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
 
-        // Handle PDF export action
         if (id == R.id.action_export_pdf) {
             if (adapter == null || adapter.getFilteredCount() == 0) {
                 Toast.makeText(this, "No employees to export", Toast.LENGTH_SHORT).show();
             } else {
-                exportListAsPdf(); // Direct call - opens print dialog
+                exportListAsPdf();
             }
             return true;
         }
@@ -592,6 +536,7 @@ public class MainActivity extends AppCompatActivity {
                     .setTitle("Logout")
                     .setMessage("Are you sure you want to logout?")
                     .setPositiveButton("Logout",(d,w)-> {
+                        authRepository.signOut();
                         repository.close();
                         startActivity(new Intent(this,LoginActivity.class)
                                 .setFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK|Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -610,7 +555,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onActivityResult(int req, int res, @Nullable Intent data) {
         super.onActivityResult(req, res, data);
 
-        // Handle existing results
         if ((req == REQUEST_ADD || req == REQUEST_EDIT) && res == RESULT_OK) {
             loadEmployeeData();
             updateLastRefreshTime();
@@ -619,7 +563,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Handle CSV export result
         if (req == REQ_CREATE_CSV && res == RESULT_OK && data != null && data.getData() != null) {
             exportToUri(data.getData());
             return;
@@ -638,6 +581,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         if (repository != null) {
             repository.close();
+        }
+        if (authRepository != null) {
+            authRepository.close();
         }
         super.onDestroy();
     }

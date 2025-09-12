@@ -26,6 +26,7 @@ import androidx.core.content.FileProvider;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
+import com.google.firebase.auth.FirebaseAuth;
 import com.squareup.picasso.Picasso;
 
 import java.io.File;
@@ -51,8 +52,10 @@ public class EmployeeProfileActivity extends AppCompatActivity {
 
     private Uri pendingCameraUri;
     private EmployeeRepository repository;
+    private AuthRepository authRepository;
     private Employee currentEmployee;
-    private String employeeId;
+    private String employeeId; // This is the empId (e.g., MAN251001)
+    private String currentUserUid; // Firebase UID
     private OpenAction pendingAction;
 
     @Override
@@ -60,15 +63,21 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_employee_profile);
 
-        employeeId = getIntent().getStringExtra("employeeId");
-        if (employeeId == null) {
-            Toast.makeText(this, "Employee ID not found", Toast.LENGTH_SHORT).show();
+        // Initialize repositories
+        repository = new EmployeeRepository(this);
+        authRepository = new AuthRepository(this);
+        repository.open();
+
+        // Get current user UID from Firebase Auth
+        currentUserUid = authRepository.getCurrentUserUid();
+        if (currentUserUid == null) {
+            Toast.makeText(this, "User not authenticated", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        repository = new EmployeeRepository(this);
-        repository.open();
+        // Get employee ID from intent (for backward compatibility)
+        employeeId = getIntent().getStringExtra("employeeId");
 
         initializeViews();
         setupToolbar();
@@ -105,16 +114,54 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     }
 
     private void loadEmployeeData() {
-        currentEmployee = repository.getEmployeeByEmpId(employeeId);
-        if (currentEmployee == null) {
-            Toast.makeText(this, "Employee data not found", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
-        displayEmployeeData();
+        // Load employee data using Firebase UID
+        repository.getEmployeeByUid(currentUserUid, new EmployeeRepository.EmployeeCallback() {
+            @Override
+            public void onSuccess(Employee employee) {
+                runOnUiThread(() -> {
+                    currentEmployee = employee;
+                    displayEmployeeData();
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(EmployeeProfileActivity.this, "Failed to load profile: " + error, Toast.LENGTH_LONG).show();
+                    // Try using employeeId as fallback if provided
+                    if (employeeId != null) {
+                        loadByEmployeeId();
+                    } else {
+                        finish();
+                    }
+                });
+            }
+        });
+    }
+
+    private void loadByEmployeeId() {
+        repository.getEmployeeByEmpId(employeeId, new EmployeeRepository.EmployeeCallback() {
+            @Override
+            public void onSuccess(Employee employee) {
+                runOnUiThread(() -> {
+                    currentEmployee = employee;
+                    displayEmployeeData();
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(EmployeeProfileActivity.this, "Employee data not found", Toast.LENGTH_SHORT).show();
+                    finish();
+                });
+            }
+        });
     }
 
     private void displayEmployeeData() {
+        if (currentEmployee == null) return;
+
         tvEmployeeName.setText(currentEmployee.getEmpName());
         tvEmployeeId.setText(currentEmployee.getEmpId());
         tvEmail.setText(currentEmployee.getEmpEmail() != null
@@ -123,7 +170,7 @@ public class EmployeeProfileActivity extends AppCompatActivity {
                 ? currentEmployee.getDesignation() : "Not assigned");
         tvDepartment.setText(currentEmployee.getDepartment() != null
                 ? currentEmployee.getDepartment() : "Not assigned");
-        tvSalary.setText("₹" + currentEmployee.getSalary());
+        tvSalary.setText("₹" + String.format("%.0f", currentEmployee.getSalary()));
         tvJoinedDate.setText(currentEmployee.getJoinedDate() != null
                 ? currentEmployee.getJoinedDate() : "Not available");
         tvAddressLine1.setText(currentEmployee.getAddressLine1() != null
@@ -143,6 +190,7 @@ public class EmployeeProfileActivity extends AppCompatActivity {
             getSupportActionBar().setTitle(currentEmployee.getEmpName() + "'s Profile");
         }
 
+        // Load profile photo
         String photoPath = currentEmployee.getProfilePhotoPath();
         if (photoPath != null && ImageUtils.isPhotoExists(photoPath)) {
             Picasso.get()
@@ -157,13 +205,14 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     private void setupClickListeners() {
         btnChangePassword.setOnClickListener(v -> {
             Intent i = new Intent(this, ChangePasswordActivity.class);
-            i.putExtra("employeeId", employeeId);
+            i.putExtra("employeeId", currentEmployee != null ? currentEmployee.getEmpId() : employeeId);
             startActivityForResult(i, REQUEST_CHANGE_PASSWORD);
         });
 
         View.OnClickListener photoMenu = v -> {
-            boolean hasPhoto = currentEmployee.getProfilePhotoPath() != null
-                    && ImageUtils.isPhotoExists(currentEmployee.getProfilePhotoPath());
+            boolean hasPhoto = currentEmployee != null &&
+                    currentEmployee.getProfilePhotoPath() != null &&
+                    ImageUtils.isPhotoExists(currentEmployee.getProfilePhotoPath());
 
             PhotoSelectionDialogFragment dlg = PhotoSelectionDialogFragment.newInstance(hasPhoto);
             dlg.setPhotoSelectionListener(new PhotoSelectionDialogFragment.PhotoSelectionListener() {
@@ -174,22 +223,14 @@ public class EmployeeProfileActivity extends AppCompatActivity {
                     ensurePermissionsThen(EmployeeProfileActivity.this::openGallery);
                 }
                 @Override public void onViewFullImageSelected() {
-                    FullImageViewDialogFragment.newInstance(
-                            currentEmployee.getProfilePhotoPath()
-                    ).show(getSupportFragmentManager(), "FULL_IMAGE");
+                    if (currentEmployee != null && currentEmployee.getProfilePhotoPath() != null) {
+                        FullImageViewDialogFragment.newInstance(
+                                currentEmployee.getProfilePhotoPath()
+                        ).show(getSupportFragmentManager(), "FULL_IMAGE");
+                    }
                 }
                 @Override public void onRemovePhotoSelected() {
-                    String path = currentEmployee.getProfilePhotoPath();
-                    if (path != null) ImageUtils.deleteProfilePhoto(path);
-                    if (repository.updateEmployeeProfilePhoto(employeeId, null)) {
-                        currentEmployee.setProfilePhotoPath(null);
-                        ivProfilePhoto.setImageResource(R.drawable.ic_person_placeholder);
-                        Toast.makeText(EmployeeProfileActivity.this,
-                                "Photo removed", Toast.LENGTH_SHORT).show();
-                    } else {
-                        Toast.makeText(EmployeeProfileActivity.this,
-                                "Failed to remove", Toast.LENGTH_SHORT).show();
-                    }
+                    removeProfilePhoto();
                 }
             });
             dlg.show(getSupportFragmentManager(), "PHOTO_MENU");
@@ -197,6 +238,31 @@ public class EmployeeProfileActivity extends AppCompatActivity {
 
         ivProfilePhoto.setOnClickListener(photoMenu);
         ivEditOverlay.setOnClickListener(photoMenu);
+    }
+
+    private void removeProfilePhoto() {
+        if (currentEmployee == null) return;
+
+        String path = currentEmployee.getProfilePhotoPath();
+        if (path != null) ImageUtils.deleteProfilePhoto(path);
+
+        repository.updateEmployeeProfilePhoto(currentUserUid, null, new EmployeeRepository.UpdateCallback() {
+            @Override
+            public void onSuccess(String message) {
+                runOnUiThread(() -> {
+                    currentEmployee.setProfilePhotoPath(null);
+                    ivProfilePhoto.setImageResource(R.drawable.ic_person_placeholder);
+                    Toast.makeText(EmployeeProfileActivity.this, "Photo removed", Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(EmployeeProfileActivity.this, "Failed to remove photo: " + error, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
 
     private void ensurePermissionsThen(OpenAction action) {
@@ -234,8 +300,7 @@ public class EmployeeProfileActivity extends AppCompatActivity {
                 pendingAction.run();
                 pendingAction = null;
             } else {
-                Toast.makeText(this,
-                        "Permissions required", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Permissions required", Toast.LENGTH_LONG).show();
             }
         } else {
             super.onRequestPermissionsResult(rc, perms, grants);
@@ -256,7 +321,8 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     private void openCamera() {
         try {
             File dir = ImageUtils.getProfilePhotosDirectory(this);
-            String fn = ImageUtils.generatePhotoFileName(employeeId);
+            String fn = ImageUtils.generatePhotoFileName(currentEmployee != null ?
+                    currentEmployee.getEmpId() : "temp");
             File out = new File(dir, fn);
             Uri uri = FileProvider.getUriForFile(
                     this, getPackageName() + ".provider", out);
@@ -275,6 +341,7 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
         if (res != RESULT_OK) return;
+
         if (req == REQ_PICK_IMAGE && data != null && data.getData() != null) {
             Uri uri = data.getData();
             getContentResolver().takePersistableUriPermission(
@@ -284,27 +351,40 @@ public class EmployeeProfileActivity extends AppCompatActivity {
             handleImage(pendingCameraUri);
             pendingCameraUri = null;
         } else if (req == REQUEST_CHANGE_PASSWORD) {
+            // Reload data to update password status
             loadEmployeeData();
-            Toast.makeText(this,
-                    "Password changed", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Password changed successfully", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void handleImage(Uri uri) {
+        if (currentEmployee == null) return;
+
         String saved = ImageUtils.saveImageToInternalStorage(
-                this, uri, employeeId);
-        if (saved != null &&
-                repository.updateEmployeeProfilePhoto(employeeId, saved)) {
-            currentEmployee.setProfilePhotoPath(saved);
-            Picasso.get()
-                    .load(new File(saved))
-                    .placeholder(R.drawable.ic_person_placeholder)
-                    .into(ivProfilePhoto);
-            Toast.makeText(this,
-                    "Photo updated", Toast.LENGTH_SHORT).show();
+                this, uri, currentEmployee.getEmpId());
+        if (saved != null) {
+            repository.updateEmployeeProfilePhoto(currentUserUid, saved, new EmployeeRepository.UpdateCallback() {
+                @Override
+                public void onSuccess(String message) {
+                    runOnUiThread(() -> {
+                        currentEmployee.setProfilePhotoPath(saved);
+                        Picasso.get()
+                                .load(new File(saved))
+                                .placeholder(R.drawable.ic_person_placeholder)
+                                .into(ivProfilePhoto);
+                        Toast.makeText(EmployeeProfileActivity.this, "Photo updated", Toast.LENGTH_SHORT).show();
+                    });
+                }
+
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(EmployeeProfileActivity.this, "Failed to update photo: " + error, Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
         } else {
-            Toast.makeText(this,
-                    "Failed to save photo", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Failed to save photo", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -324,7 +404,8 @@ public class EmployeeProfileActivity extends AppCompatActivity {
             new AlertDialog.Builder(this)
                     .setTitle("Logout")
                     .setMessage("Are you sure?")
-                    .setPositiveButton("Logout",(d,w)->{
+                    .setPositiveButton("Logout", (d, w) -> {
+                        authRepository.signOut();
                         repository.close();
                         Intent i = new Intent(this, LoginActivity.class);
                         i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
@@ -332,43 +413,54 @@ public class EmployeeProfileActivity extends AppCompatActivity {
                         startActivity(i);
                         finish();
                     })
-                    .setNegativeButton("Cancel",null)
+                    .setNegativeButton("Cancel", null)
                     .show();
             return true;
         } else if (id == R.id.action_refresh) {
             loadEmployeeData();
-            Toast.makeText(this,
-                    "Profile refreshed", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Profile refreshed", Toast.LENGTH_SHORT).show();
             return true;
         } else if (id == R.id.action_export_profile_pdf) {
-            PrintManager pm = (PrintManager)getSystemService(Context.PRINT_SERVICE);
-            String job = currentEmployee.getEmpName()+" Profile - "+
-                    new java.text.SimpleDateFormat("yyyy-MM-dd",
-                            java.util.Locale.getDefault()).format(new java.util.Date());
-            ProfilePrintAdapter pa =
-                    new ProfilePrintAdapter(this, currentEmployee, job);
-            PrintAttributes attrs = new PrintAttributes.Builder()
-                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                    .setResolution(new PrintAttributes.Resolution("pdf","PDF",600,600))
-                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-                    .build();
-            PrintJob pj = pm.print(job, pa, attrs);
-            if (pj!=null) {
-                Toast.makeText(this,
-                        "Select 'Save as PDF' in print dialog",
-                        Toast.LENGTH_LONG).show();
-            } else {
-                Toast.makeText(this,
-                        "Print job failed", Toast.LENGTH_SHORT).show();
-            }
+            exportProfileAsPdf();
             return true;
         }
         return super.onOptionsItemSelected(it);
     }
 
+    private void exportProfileAsPdf() {
+        if (currentEmployee == null) {
+            Toast.makeText(this, "Employee data not loaded", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            PrintManager pm = (PrintManager) getSystemService(Context.PRINT_SERVICE);
+            String job = currentEmployee.getEmpName() + " Profile - " +
+                    new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                            .format(new java.util.Date());
+
+            ProfilePrintAdapter pa = new ProfilePrintAdapter(this, currentEmployee, job);
+            PrintAttributes attrs = new PrintAttributes.Builder()
+                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                    .setResolution(new PrintAttributes.Resolution("pdf", "PDF", 600, 600))
+                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                    .build();
+
+            PrintJob pj = pm.print(job, pa, attrs);
+            if (pj != null) {
+                Toast.makeText(this, "Select 'Save as PDF' in print dialog", Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this, "Print job failed", Toast.LENGTH_SHORT).show();
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "PDF export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
     @Override
     protected void onDestroy() {
-        if (repository!=null) repository.close();
+        if (repository != null) repository.close();
+        if (authRepository != null) authRepository.close();
         super.onDestroy();
     }
 }

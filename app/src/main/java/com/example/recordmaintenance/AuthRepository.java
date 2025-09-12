@@ -1,207 +1,209 @@
 package com.example.recordmaintenance;
 
 import android.content.Context;
-import android.database.Cursor;
-import android.database.SQLException;
-import android.database.sqlite.SQLiteDatabase;
-import android.text.TextUtils;
-import android.util.Log;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import androidx.annotation.NonNull;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-
+/**
+ * Firebase-based Authentication Repository
+ * Replaces SQLite-based authentication with Firebase Auth + Realtime Database
+ */
 public class AuthRepository {
 
     private static final String TAG = "AuthRepository";
-    private DatabaseHelper dbHelper;
-    private SQLiteDatabase database;
+    private final FirebaseAuth mAuth;
+    private final DatabaseReference mDatabase;
+    private final Context context;
 
     public AuthRepository(Context context) {
-        dbHelper = new DatabaseHelper(context);
-        try {
-            database = dbHelper.getWritableDatabase();
-        } catch (SQLException e) {
-            Log.e(TAG, "Error opening database", e);
-        }
+        this.context = context;
+        this.mAuth = FirebaseAuth.getInstance();
+        this.mDatabase = FirebaseDatabase.getInstance().getReference();
     }
 
     /**
-     * Verify admin credentials against TblUserMaster
+     * Sign in user with email and password
      */
-    public boolean verifyAdmin(String userId, String password) {
-        if (database == null) {
-            Log.e(TAG, "Database is null");
-            return false;
-        }
+    public void signIn(String email, String password, AuthCallback callback) {
+        mAuth.signInWithEmailAndPassword(email, password)
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        if (user != null) {
+                            // Get user role from database
+                            getUserRole(user.getUid(), new RoleCallback() {
+                                @Override
+                                public void onRoleRetrieved(String role, String empId) {
+                                    callback.onSuccess(role, empId);
+                                }
 
-        String hashedPassword = hash(password);
-        String query = "SELECT COUNT(*) FROM " + DatabaseHelper.TABLE_USER_MASTER +
-                " WHERE " + DatabaseHelper.USER_ID + " = ? AND " +
-                DatabaseHelper.USER_PASSWORD + " = ?";
-
-        Cursor cursor = null;
-        try {
-            cursor = database.rawQuery(query, new String[]{userId, hashedPassword});
-            if (cursor.moveToFirst()) {
-                int count = cursor.getInt(0);
-                Log.d(TAG, "Admin verification result: " + count);
-                return count > 0;
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error verifying admin", e);
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return false;
+                                @Override
+                                public void onError(String error) {
+                                    callback.onError("Failed to get user role: " + error);
+                                }
+                            });
+                        } else {
+                            callback.onError("Authentication failed");
+                        }
+                    } else {
+                        String errorMsg = task.getException() != null ?
+                                task.getException().getMessage() : "Authentication failed";
+                        callback.onError(errorMsg);
+                    }
+                });
     }
 
     /**
-     * Get admin user details by UserID
+     * Get user role from database - Public method for LoginActivity
      */
-    public AdminUser getAdminByUserId(String userId) {
-        if (database == null) return null;
-
-        String query = "SELECT * FROM " + DatabaseHelper.TABLE_USER_MASTER +
-                " WHERE " + DatabaseHelper.USER_ID + " = ?";
-
-        Cursor cursor = null;
-        AdminUser admin = null;
-
-        try {
-            cursor = database.rawQuery(query, new String[]{userId});
-            if (cursor.moveToFirst()) {
-                admin = new AdminUser();
-                admin.setMastCode(cursor.getInt(cursor.getColumnIndexOrThrow(DatabaseHelper.USER_MAST_CODE)));
-                admin.setUserId(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.USER_ID)));
-                admin.setPassword(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.USER_PASSWORD)));
-                admin.setUserName(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.USER_NAME)));
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting admin by userId", e);
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return admin;
-    }
-
-    /**
-     * Update admin password
-     */
-    public boolean updateAdminPassword(String userId, String newPassword) {
-        if (database == null) return false;
-
-        String hashedPassword = hash(newPassword);
-        String whereClause = DatabaseHelper.USER_ID + " = ?";
-        String[] whereArgs = {userId};
-
-        android.content.ContentValues values = new android.content.ContentValues();
-        values.put(DatabaseHelper.USER_PASSWORD, hashedPassword);
-
-        try {
-            int rowsUpdated = database.update(DatabaseHelper.TABLE_USER_MASTER, values, whereClause, whereArgs);
-            return rowsUpdated > 0;
-        } catch (Exception e) {
-            Log.e(TAG, "Error updating admin password", e);
-            return false;
-        }
-    }
-
-    /**
-     * Check if admin exists by email/userId
-     */
-    public boolean adminExists(String userId) {
-        if (database == null) return false;
-
-        String query = "SELECT COUNT(*) FROM " + DatabaseHelper.TABLE_USER_MASTER +
-                " WHERE " + DatabaseHelper.USER_ID + " = ?";
-
-        Cursor cursor = null;
-        try {
-            cursor = database.rawQuery(query, new String[]{userId});
-            if (cursor.moveToFirst()) {
-                return cursor.getInt(0) > 0;
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error checking admin existence", e);
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Hash password using SHA-256
-     */
-    private String hash(String input) {
-        if (TextUtils.isEmpty(input)) return "";
-
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash = md.digest(input.getBytes());
-            StringBuilder hexString = new StringBuilder();
-
-            for (byte b : hash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
+    public void getUserRole(String uid, RoleCallback callback) {
+        mDatabase.child("users").child(uid).addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                if (dataSnapshot.exists()) {
+                    String role = dataSnapshot.child("role").getValue(String.class);
+                    String empId = dataSnapshot.child("empId").getValue(String.class);
+                    if (role != null) {
+                        callback.onRoleRetrieved(role, empId);
+                    } else {
+                        callback.onError("User role not found");
+                    }
+                } else {
+                    callback.onError("User data not found in database");
                 }
-                hexString.append(hex);
             }
 
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            Log.e(TAG, "SHA-256 not available", e);
-            return input; // Fallback to plain text (not recommended for production)
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                callback.onError(databaseError.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Send password reset email
+     */
+    public void sendPasswordResetEmail(String email, ResetCallback callback) {
+        mAuth.sendPasswordResetEmail(email)
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        callback.onSuccess("Password reset email sent to " + email);
+                    } else {
+                        String errorMsg = task.getException() != null ?
+                                task.getException().getMessage() : "Failed to send reset email";
+                        callback.onError(errorMsg);
+                    }
+                });
+    }
+
+    /**
+     * Update user password (requires recent authentication)
+     */
+    public void updatePassword(String newPassword, UpdateCallback callback) {
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user != null) {
+            user.updatePassword(newPassword)
+                    .addOnCompleteListener(task -> {
+                        if (task.isSuccessful()) {
+                            callback.onSuccess("Password updated successfully");
+                        } else {
+                            String errorMsg = task.getException() != null ?
+                                    task.getException().getMessage() : "Failed to update password";
+                            callback.onError(errorMsg);
+                        }
+                    });
+        } else {
+            callback.onError("User not authenticated");
         }
     }
 
     /**
-     * Close database connection
+     * Re-authenticate user before password change
      */
+    public void reauthenticateUser(String currentPassword, ReauthCallback callback) {
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user != null && user.getEmail() != null) {
+            com.google.firebase.auth.AuthCredential credential =
+                    com.google.firebase.auth.EmailAuthProvider.getCredential(user.getEmail(), currentPassword);
+
+            user.reauthenticate(credential)
+                    .addOnCompleteListener(task -> {
+                        if (task.isSuccessful()) {
+                            callback.onSuccess();
+                        } else {
+                            String errorMsg = task.getException() != null ?
+                                    task.getException().getMessage() : "Re-authentication failed";
+                            callback.onError(errorMsg);
+                        }
+                    });
+        } else {
+            callback.onError("User not authenticated");
+        }
+    }
+
+    /**
+     * Sign out current user
+     */
+    public void signOut() {
+        mAuth.signOut();
+    }
+
+    /**
+     * Get current user
+     */
+    public FirebaseUser getCurrentUser() {
+        return mAuth.getCurrentUser();
+    }
+
+    /**
+     * Check if user is signed in
+     */
+    public boolean isUserSignedIn() {
+        return mAuth.getCurrentUser() != null;
+    }
+
+    /**
+     * Get current user UID
+     */
+    public String getCurrentUserUid() {
+        FirebaseUser user = mAuth.getCurrentUser();
+        return user != null ? user.getUid() : null;
+    }
+
+    // Callback interfaces
+    public interface AuthCallback {
+        void onSuccess(String role, String empId);
+        void onError(String error);
+    }
+
+    public interface RoleCallback {
+        void onRoleRetrieved(String role, String empId);
+        void onError(String error);
+    }
+
+    public interface ResetCallback {
+        void onSuccess(String message);
+        void onError(String error);
+    }
+
+    public interface UpdateCallback {
+        void onSuccess(String message);
+        void onError(String error);
+    }
+
+    public interface ReauthCallback {
+        void onSuccess();
+        void onError(String error);
+    }
+
+    // Cleanup method (no SQLite to close)
     public void close() {
-        if (dbHelper != null) {
-            dbHelper.close();
-        }
-    }
-
-    /**
-     * Admin User model class
-     */
-    public static class AdminUser {
-        private int mastCode;
-        private String userId;
-        private String password;
-        private String userName;
-
-        // Constructors
-        public AdminUser() {}
-
-        public AdminUser(String userId, String password, String userName) {
-            this.userId = userId;
-            this.password = password;
-            this.userName = userName;
-        }
-
-        // Getters and Setters
-        public int getMastCode() { return mastCode; }
-        public void setMastCode(int mastCode) { this.mastCode = mastCode; }
-
-        public String getUserId() { return userId; }
-        public void setUserId(String userId) { this.userId = userId; }
-
-        public String getPassword() { return password; }
-        public void setPassword(String password) { this.password = password; }
-
-        public String getUserName() { return userName; }
-        public void setUserName(String userName) { this.userName = userName; }
+        // No resources to clean up for Firebase
     }
 }
