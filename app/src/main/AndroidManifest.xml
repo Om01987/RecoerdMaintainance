@@ -7,10 +7,7 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
-    <!-- Storage Permissions for ID Card Download -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-
-    <!-- Internet Permission (if needed for Firebase) -->
+    <!-- Internet Permissions for Firebase -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -24,7 +21,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RecordMaintenance">
 
-        <!-- FileProvider for camera capture and file sharing -->
+        <!-- FileProvider for camera capture and photo sharing -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"
@@ -82,5 +79,4 @@
             android:theme="@style/Theme.RecordMaintenance" />
 
     </application>
-
 </manifest>

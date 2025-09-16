@@ -26,6 +26,8 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -42,6 +44,7 @@ import com.squareup.picasso.Target;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -76,6 +79,17 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     private String currentUserUid; // Firebase UID
     private OpenAction pendingAction;
 
+    private final ActivityResultLauncher<Intent> saveDocumentLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                            Uri uri = result.getData().getData();
+                            if (uri != null) writeIdCardToUri(uri);
+                        }
+                    });
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -101,6 +115,15 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         setupToolbar();
         loadEmployeeData();
         setupClickListeners();
+    }
+
+    private void writeIdCardToUri(Uri uri) {
+        try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+            createIdCardBitmap().compress(Bitmap.CompressFormat.PNG, 100, os);
+            Toast.makeText(this, "Saved ID Card", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Save failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void initializeViews() {
@@ -317,18 +340,14 @@ public class EmployeeProfileActivity extends AppCompatActivity {
             Toast.makeText(this, "Employee data not loaded", Toast.LENGTH_SHORT).show();
             return;
         }
-
-        // Check storage permission for Android 6.0+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_STORAGE_PERMS);
-                return;
-            }
-        }
-
-        generateAndSaveIdCard();
+        // Launch system file picker to save PNG
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.setType("image/png");
+        String name = "ID_Card_" + currentEmployee.getEmpId() + "_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) +
+                ".png";
+        intent.putExtra(Intent.EXTRA_TITLE, name);
+        saveDocumentLauncher.launch(intent);
     }
 
     private void generateAndSaveIdCard() {
