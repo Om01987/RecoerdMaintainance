@@ -2,9 +2,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Camera and Image Permissions -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
+    <!-- Storage Permissions for ID Card Download -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
+    <!-- Internet Permission (if needed for Firebase) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="true"
@@ -16,7 +24,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RecordMaintenance">
 
-        <!-- FileProvider for camera capture -->
+        <!-- FileProvider for camera capture and file sharing -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"
@@ -27,7 +35,7 @@
                 android:resource="@xml/filepaths" />
         </provider>
 
-        <!-- Existing activities... -->
+        <!-- Activities -->
         <activity
             android:name=".ForgotPasswordActivity"
             android:exported="false"

@@ -4,10 +4,20 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.Typeface;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
 import android.print.PrintJob;
 import android.print.PrintManager;
 import android.view.Menu;
@@ -26,12 +36,17 @@ import androidx.core.content.FileProvider;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
-import com.google.firebase.auth.FirebaseAuth;
 import com.squareup.picasso.Picasso;
+import com.squareup.picasso.Target;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 
@@ -41,14 +56,17 @@ public class EmployeeProfileActivity extends AppCompatActivity {
     private static final int REQ_PICK_IMAGE = 501;
     private static final int REQ_CAPTURE_IMAGE = 502;
     private static final int REQ_PERMS = 1000;
+    private static final int REQ_STORAGE_PERMS = 1001;
 
     private MaterialToolbar toolbar;
     private TextView tvEmployeeName, tvEmployeeId, tvEmail,
             tvDesignation, tvDepartment, tvSalary, tvJoinedDate, tvPasswordStatus;
     private TextView tvAddressLine1, tvAddressLine2, tvCity, tvState, tvCountry;
-    private MaterialButton btnChangePassword;
-    private CircleImageView ivProfilePhoto;
+    private MaterialButton btnChangePassword, btnDownloadIdCard, btnPrintIdCard;
+    private CircleImageView ivProfilePhoto, ivIdCardPhoto;
+    private TextView tvIdCardName, tvIdCardId, tvIdCardDesignation, tvIdCardDepartment, tvIdCardJoinDate;
     private View ivEditOverlay;
+    private CardView cvIdCardPreview;
 
     private Uri pendingCameraUri;
     private EmployeeRepository repository;
@@ -103,6 +121,17 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         btnChangePassword = findViewById(R.id.btnChangePassword);
         ivProfilePhoto = findViewById(R.id.ivProfilePhoto);
         ivEditOverlay = findViewById(R.id.ivEditOverlay);
+
+        // ID Card views
+        btnDownloadIdCard = findViewById(R.id.btnDownloadIdCard);
+        btnPrintIdCard = findViewById(R.id.btnPrintIdCard);
+        ivIdCardPhoto = findViewById(R.id.ivIdCardPhoto);
+        tvIdCardName = findViewById(R.id.tvIdCardName);
+        tvIdCardId = findViewById(R.id.tvIdCardId);
+        tvIdCardDesignation = findViewById(R.id.tvIdCardDesignation);
+        tvIdCardDepartment = findViewById(R.id.tvIdCardDepartment);
+        tvIdCardJoinDate = findViewById(R.id.tvIdCardJoinDate);
+        cvIdCardPreview = findViewById(R.id.cvIdCardPreview);
     }
 
     private void setupToolbar() {
@@ -121,6 +150,7 @@ public class EmployeeProfileActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     currentEmployee = employee;
                     displayEmployeeData();
+                    updateIdCardData();
                 });
             }
 
@@ -146,6 +176,7 @@ public class EmployeeProfileActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     currentEmployee = employee;
                     displayEmployeeData();
+                    updateIdCardData();
                 });
             }
 
@@ -202,12 +233,53 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         }
     }
 
+    private void updateIdCardData() {
+        if (currentEmployee == null) return;
+
+        // Update ID card information
+        tvIdCardName.setText(currentEmployee.getEmpName());
+        tvIdCardId.setText(currentEmployee.getEmpId());
+        tvIdCardDesignation.setText(currentEmployee.getDesignation() != null
+                ? currentEmployee.getDesignation() : "Employee");
+        tvIdCardDepartment.setText((currentEmployee.getDepartment() != null
+                ? currentEmployee.getDepartment() : "General") + " Department");
+
+        // Format join date for ID card
+        if (currentEmployee.getJoinedDate() != null) {
+            try {
+                SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+                SimpleDateFormat outputFormat = new SimpleDateFormat("yyyy", Locale.getDefault());
+                Date date = inputFormat.parse(currentEmployee.getJoinedDate());
+                tvIdCardJoinDate.setText("Since " + outputFormat.format(date));
+            } catch (Exception e) {
+                tvIdCardJoinDate.setText("Since " + currentEmployee.getJoinedDate().substring(0, 4));
+            }
+        } else {
+            tvIdCardJoinDate.setText("Since 2023");
+        }
+
+        // Load profile photo for ID card
+        String photoPath = currentEmployee.getProfilePhotoPath();
+        if (photoPath != null && ImageUtils.isPhotoExists(photoPath)) {
+            Picasso.get()
+                    .load(new File(photoPath))
+                    .placeholder(R.drawable.ic_person_placeholder)
+                    .into(ivIdCardPhoto);
+        } else {
+            ivIdCardPhoto.setImageResource(R.drawable.ic_person_placeholder);
+        }
+    }
+
     private void setupClickListeners() {
         btnChangePassword.setOnClickListener(v -> {
             Intent i = new Intent(this, ChangePasswordActivity.class);
             i.putExtra("employeeId", currentEmployee != null ? currentEmployee.getEmpId() : employeeId);
             startActivityForResult(i, REQUEST_CHANGE_PASSWORD);
         });
+
+        // ID Card action buttons
+        btnDownloadIdCard.setOnClickListener(v -> downloadIdCard());
+        btnPrintIdCard.setOnClickListener(v -> printIdCard());
 
         View.OnClickListener photoMenu = v -> {
             boolean hasPhoto = currentEmployee != null &&
@@ -240,6 +312,187 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         ivEditOverlay.setOnClickListener(photoMenu);
     }
 
+    private void downloadIdCard() {
+        if (currentEmployee == null) {
+            Toast.makeText(this, "Employee data not loaded", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Check storage permission for Android 6.0+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_STORAGE_PERMS);
+                return;
+            }
+        }
+
+        generateAndSaveIdCard();
+    }
+
+    private void generateAndSaveIdCard() {
+        try {
+            // Create bitmap from ID card view
+            Bitmap idCardBitmap = createIdCardBitmap();
+
+            // Save to Downloads folder
+            String fileName = "ID_Card_" + currentEmployee.getEmpId() + "_" +
+                    new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".png";
+
+            File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            File file = new File(downloadsDir, fileName);
+
+            FileOutputStream fos = new FileOutputStream(file);
+            idCardBitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+            fos.close();
+
+            Toast.makeText(this, "ID Card saved to Downloads: " + fileName, Toast.LENGTH_LONG).show();
+
+            // Show option to share
+            showShareDialog(file);
+
+        } catch (IOException e) {
+            Toast.makeText(this, "Failed to save ID card: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private Bitmap createIdCardBitmap() {
+        // Create a high-quality bitmap of the ID card
+        int width = 800;
+        int height = 500;
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        // Create gradient background
+        Paint backgroundPaint = new Paint();
+        backgroundPaint.setColor(Color.parseColor("#2196F3")); // Material Blue
+        canvas.drawRect(0, 0, width, height, backgroundPaint);
+
+        // Add company header
+        Paint headerPaint = new Paint();
+        headerPaint.setColor(Color.WHITE);
+        headerPaint.setTextSize(40);
+        headerPaint.setTypeface(Typeface.DEFAULT_BOLD);
+        headerPaint.setAntiAlias(true);
+        canvas.drawText("MatraSoftech", 40, 60, headerPaint);
+
+        Paint idBadgePaint = new Paint();
+        idBadgePaint.setColor(Color.parseColor("#40FFFFFF"));
+        canvas.drawRect(width - 200, 20, width - 40, 70, idBadgePaint);
+
+        Paint idTextPaint = new Paint();
+        idTextPaint.setColor(Color.WHITE);
+        idTextPaint.setTextSize(24);
+        idTextPaint.setAntiAlias(true);
+        canvas.drawText("ID CARD", width - 180, 50, idTextPaint);
+
+        // Add employee photo circle (placeholder)
+        Paint photoPaint = new Paint();
+        photoPaint.setColor(Color.WHITE);
+        photoPaint.setAntiAlias(true);
+        canvas.drawCircle(120, 200, 60, photoPaint);
+
+        // Try to load actual photo
+        String photoPath = currentEmployee.getProfilePhotoPath();
+        if (photoPath != null && ImageUtils.isPhotoExists(photoPath)) {
+            try {
+                Bitmap photoBitmap = ImageUtils.loadBitmapFromPath(photoPath);
+                if (photoBitmap != null) {
+                    // Scale and draw the photo
+                    Bitmap scaledPhoto = Bitmap.createScaledBitmap(photoBitmap, 120, 120, true);
+                    canvas.drawBitmap(scaledPhoto, 60, 140, null);
+                }
+            } catch (Exception e) {
+                // Use placeholder if photo loading fails
+            }
+        }
+
+        // Add employee details
+        Paint namePaint = new Paint();
+        namePaint.setColor(Color.WHITE);
+        namePaint.setTextSize(32);
+        namePaint.setTypeface(Typeface.DEFAULT_BOLD);
+        namePaint.setAntiAlias(true);
+        canvas.drawText(currentEmployee.getEmpName(), 220, 160, namePaint);
+
+        Paint detailsPaint = new Paint();
+        detailsPaint.setColor(Color.parseColor("#E0FFFFFF"));
+        detailsPaint.setTextSize(24);
+        detailsPaint.setAntiAlias(true);
+        canvas.drawText(currentEmployee.getEmpId(), 220, 190, detailsPaint);
+        canvas.drawText(currentEmployee.getDesignation() != null ?
+                currentEmployee.getDesignation() : "Employee", 220, 220, detailsPaint);
+        canvas.drawText((currentEmployee.getDepartment() != null ?
+                currentEmployee.getDepartment() : "General") + " Department", 220, 250, detailsPaint);
+
+        // Add footer
+        Paint footerPaint = new Paint();
+        footerPaint.setColor(Color.parseColor("#B0FFFFFF"));
+        footerPaint.setTextSize(18);
+        footerPaint.setAntiAlias(true);
+        canvas.drawText("Valid until further notice", 40, height - 40, footerPaint);
+
+        String joinYear = "2023";
+        if (currentEmployee.getJoinedDate() != null) {
+            joinYear = currentEmployee.getJoinedDate().substring(0, 4);
+        }
+        canvas.drawText("Since " + joinYear, width - 150, height - 40, footerPaint);
+
+        return bitmap;
+    }
+
+    private void showShareDialog(File file) {
+        new AlertDialog.Builder(this)
+                .setTitle("ID Card Saved")
+                .setMessage("ID Card has been saved to Downloads. Would you like to share it?")
+                .setPositiveButton("Share", (dialog, which) -> shareIdCard(file))
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void shareIdCard(File file) {
+        try {
+            Uri fileUri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType("image/png");
+            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+            shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Employee ID Card - " + currentEmployee.getEmpName());
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(shareIntent, "Share ID Card"));
+        } catch (Exception e) {
+            Toast.makeText(this, "Failed to share ID card", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void printIdCard() {
+        if (currentEmployee == null) {
+            Toast.makeText(this, "Employee data not loaded", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            PrintManager printManager = (PrintManager) getSystemService(Context.PRINT_SERVICE);
+            String jobName = "ID_Card_" + currentEmployee.getEmpName();
+
+            PrintDocumentAdapter adapter = new IdCardPrintAdapter(this, currentEmployee);
+            PrintAttributes attributes = new PrintAttributes.Builder()
+                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                    .setResolution(new PrintAttributes.Resolution("pdf", "PDF", 600, 600))
+                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                    .build();
+
+            PrintJob printJob = printManager.print(jobName, adapter, attributes);
+            if (printJob != null) {
+                Toast.makeText(this, "Select 'Save as PDF' or print to printer", Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this, "Print job failed", Toast.LENGTH_SHORT).show();
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Print failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void removeProfilePhoto() {
         if (currentEmployee == null) return;
 
@@ -252,6 +505,7 @@ public class EmployeeProfileActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     currentEmployee.setProfilePhotoPath(null);
                     ivProfilePhoto.setImageResource(R.drawable.ic_person_placeholder);
+                    ivIdCardPhoto.setImageResource(R.drawable.ic_person_placeholder);
                     Toast.makeText(EmployeeProfileActivity.this, "Photo removed", Toast.LENGTH_SHORT).show();
                 });
             }
@@ -301,6 +555,14 @@ public class EmployeeProfileActivity extends AppCompatActivity {
                 pendingAction = null;
             } else {
                 Toast.makeText(this, "Permissions required", Toast.LENGTH_LONG).show();
+            }
+        } else if (rc == REQ_STORAGE_PERMS) {
+            boolean ok = true;
+            for (int g : grants) if (g != PackageManager.PERMISSION_GRANTED) ok = false;
+            if (ok) {
+                generateAndSaveIdCard();
+            } else {
+                Toast.makeText(this, "Storage permission required to save ID card", Toast.LENGTH_LONG).show();
             }
         } else {
             super.onRequestPermissionsResult(rc, perms, grants);
@@ -372,6 +634,11 @@ public class EmployeeProfileActivity extends AppCompatActivity {
                                 .load(new File(saved))
                                 .placeholder(R.drawable.ic_person_placeholder)
                                 .into(ivProfilePhoto);
+                        // Also update ID card photo
+                        Picasso.get()
+                                .load(new File(saved))
+                                .placeholder(R.drawable.ic_person_placeholder)
+                                .into(ivIdCardPhoto);
                         Toast.makeText(EmployeeProfileActivity.this, "Photo updated", Toast.LENGTH_SHORT).show();
                     });
                 }
@@ -436,8 +703,8 @@ public class EmployeeProfileActivity extends AppCompatActivity {
         try {
             PrintManager pm = (PrintManager) getSystemService(Context.PRINT_SERVICE);
             String job = currentEmployee.getEmpName() + " Profile - " +
-                    new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                            .format(new java.util.Date());
+                    new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                            .format(new Date());
 
             ProfilePrintAdapter pa = new ProfilePrintAdapter(this, currentEmployee, job);
             PrintAttributes attrs = new PrintAttributes.Builder()

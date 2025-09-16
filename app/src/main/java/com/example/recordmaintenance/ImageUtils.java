@@ -2,6 +2,8 @@ package com.example.recordmaintenance;
 
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Environment;
 import android.util.Log;
@@ -108,6 +110,33 @@ public class ImageUtils {
     public static long getFileSizeKB(String filePath) {
         File file = new File(filePath);
         return file.length() / 1024;
+    }
+
+    /**
+     * Load bitmap from file path with memory optimization
+     */
+    public static Bitmap loadBitmapFromPath(String path) {
+        try {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inSampleSize = 2; // Scale down to reduce memory usage
+            options.inPreferredConfig = Bitmap.Config.RGB_565; // Use less memory
+            return BitmapFactory.decodeFile(path, options);
+        } catch (Exception e) {
+            Log.e(TAG, "Error loading bitmap from path: " + path, e);
+            return null;
+        } catch (OutOfMemoryError e) {
+            Log.e(TAG, "Out of memory loading bitmap: " + path, e);
+            // Try with higher sample size
+            try {
+                BitmapFactory.Options options = new BitmapFactory.Options();
+                options.inSampleSize = 4;
+                options.inPreferredConfig = Bitmap.Config.RGB_565;
+                return BitmapFactory.decodeFile(path, options);
+            } catch (Exception ex) {
+                Log.e(TAG, "Failed to load bitmap even with higher sample size", ex);
+                return null;
+            }
+        }
     }
 
     /**

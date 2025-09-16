@@ -8,4 +8,10 @@
 
     <!-- Cache directory for temporary files -->
     <cache-path name="cache" path="." />
+
+    <!-- Downloads directory for exported/sharable files -->
+    <external-files-path name="downloads" path="Download/" />
+
+    <!-- General-purpose path for forward compatibility/sharing -->
+    <external-files-path name="external_files_path" path="." />
 </paths>

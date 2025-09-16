@@ -375,6 +375,209 @@
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
+            <!-- Employee ID Card Section -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/cvIdCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="6dp"
+                app:cardBackgroundColor="#FFFFFF">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🆔 Employee ID Card"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="?attr/colorPrimary"
+                        android:layout_marginBottom="16dp" />
+
+                    <!-- ID Card Preview -->
+                    <androidx.cardview.widget.CardView
+                        android:id="@+id/cvIdCardPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="200dp"
+                        android:layout_marginBottom="16dp"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="8dp"
+                        android:background="@drawable/id_card_gradient">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="vertical"
+                            android:background="@drawable/id_card_gradient"
+                            android:padding="16dp">
+
+                            <!-- Company Header -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal"
+                                android:gravity="center_vertical"
+                                android:layout_marginBottom="12dp">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="MatraSoftech"
+                                    android:textColor="#FFFFFF"
+                                    android:textSize="18sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="ID CARD"
+                                    android:textColor="#FFFFFF"
+                                    android:textSize="12sp"
+                                    android:background="#40FFFFFF"
+                                    android:padding="4dp"
+                                    android:layout_marginStart="8dp" />
+                            </LinearLayout>
+
+                            <!-- Employee Info Section -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="0dp"
+                                android:layout_weight="1"
+                                android:orientation="horizontal">
+
+                                <!-- Photo Section -->
+                                <FrameLayout
+                                    android:layout_width="60dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_marginEnd="12dp">
+
+                                    <de.hdodenhof.circleimageview.CircleImageView
+                                        android:id="@+id/ivIdCardPhoto"
+                                        android:layout_width="60dp"
+                                        android:layout_height="60dp"
+                                        android:layout_gravity="center"
+                                        android:src="@drawable/ic_person_placeholder"
+                                        app:civ_border_width="2dp"
+                                        app:civ_border_color="#FFFFFF" />
+                                </FrameLayout>
+
+                                <!-- Details Section -->
+                                <LinearLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="vertical"
+                                    android:layout_gravity="center_vertical">
+
+                                    <TextView
+                                        android:id="@+id/tvIdCardName"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="Employee Name"
+                                        android:textColor="#FFFFFF"
+                                        android:textSize="14sp"
+                                        android:textStyle="bold"
+                                        android:maxLines="1"
+                                        android:ellipsize="end" />
+
+                                    <TextView
+                                        android:id="@+id/tvIdCardId"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="MAN251001"
+                                        android:textColor="#E0FFFFFF"
+                                        android:textSize="12sp"
+                                        android:layout_marginTop="2dp" />
+
+                                    <TextView
+                                        android:id="@+id/tvIdCardDesignation"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="Software Developer"
+                                        android:textColor="#E0FFFFFF"
+                                        android:textSize="11sp"
+                                        android:layout_marginTop="2dp"
+                                        android:maxLines="1"
+                                        android:ellipsize="end" />
+
+                                    <TextView
+                                        android:id="@+id/tvIdCardDepartment"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="IT Department"
+                                        android:textColor="#E0FFFFFF"
+                                        android:textSize="11sp"
+                                        android:layout_marginTop="1dp"
+                                        android:maxLines="1"
+                                        android:ellipsize="end" />
+                                </LinearLayout>
+                            </LinearLayout>
+
+                            <!-- Footer -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal"
+                                android:gravity="center_vertical"
+                                android:layout_marginTop="8dp">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="Valid until further notice"
+                                    android:textColor="#B0FFFFFF"
+                                    android:textSize="9sp" />
+
+                                <TextView
+                                    android:id="@+id/tvIdCardJoinDate"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Since 2023"
+                                    android:textColor="#B0FFFFFF"
+                                    android:textSize="9sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </androidx.cardview.widget.CardView>
+
+                    <!-- Action Buttons -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnDownloadIdCard"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="8dp"
+                            android:text="Download"
+                            app:icon="@android:drawable/stat_sys_download"
+                            app:cornerRadius="8dp"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnPrintIdCard"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="8dp"
+                            android:text="Print"
+                            app:icon="@android:drawable/ic_menu_share"
+                            app:cornerRadius="8dp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
             <!-- Security Information Card -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/cvSecurityInfo"
