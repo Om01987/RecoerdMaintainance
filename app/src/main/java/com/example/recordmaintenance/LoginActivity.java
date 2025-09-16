@@ -111,8 +111,11 @@ public class LoginActivity extends AppCompatActivity {
             );
         } else {
             tvRoleHeader.setText("👤 Employee Login");
-            tilEmail.setHint("Employee ID or Email");
-            etEmail.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+            tilEmail.setHint("Employee Email");
+            etEmail.setInputType(
+                    android.text.InputType.TYPE_CLASS_TEXT |
+                            android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            );
         }
         clearErrors();
     }
@@ -127,75 +130,29 @@ public class LoginActivity extends AppCompatActivity {
 
         showLoading(true);
 
-        if (isAdminMode) {
-            // Admin build variant - must be admin
-            authRepository.signIn(userInput, password, new AuthRepository.AuthCallback() {
-                @Override
-                public void onSuccess(String role, String empId) {
-                    showLoading(false);
-                    redirectBasedOnRole(role, empId);
-                }
-
-                @Override
-                public void onError(String error) {
-                    showLoading(false);
-                    showError("Login failed: " + error);
-                }
-            });
-        } else {
-            // Employee build variant - email or empId supported
-            if (Patterns.EMAIL_ADDRESS.matcher(userInput).matches()) {
-                authRepository.signIn(userInput, password, new AuthRepository.AuthCallback() {
-                    @Override
-                    public void onSuccess(String role, String empId) {
-                        showLoading(false);
-                        redirectBasedOnRole(role, empId);
-                    }
-
-                    @Override
-                    public void onError(String error) {
-                        showLoading(false);
-                        showError("Login failed: " + error);
-                    }
-                });
-            } else {
-                // Resolve empId -> email, then login
-                EmployeeRepository empRepo = new EmployeeRepository(this);
-                empRepo.getEmployeeByEmpId(userInput, new EmployeeRepository.EmployeeCallback() {
-                    @Override
-                    public void onSuccess(Employee employee) {
-                        authRepository.signIn(employee.getEmpEmail(), password, new AuthRepository.AuthCallback() {
-                            @Override
-                            public void onSuccess(String role, String empId) {
-                                showLoading(false);
-                                redirectBasedOnRole(role, empId);
-                            }
-
-                            @Override
-                            public void onError(String error) {
-                                showLoading(false);
-                                showError("Invalid credentials");
-                            }
-                        });
-                    }
-
-                    @Override
-                    public void onError(String error) {
-                        showLoading(false);
-                        showError("Employee ID not found");
-                    }
-                });
+        // Email-only sign-in for both flavors to avoid unauthenticated DB reads
+        authRepository.signIn(userInput, password, new AuthRepository.AuthCallback() {
+            @Override
+            public void onSuccess(String role, String empId) {
+                showLoading(false);
+                redirectBasedOnRole(role, empId);
             }
-        }
+
+            @Override
+            public void onError(String error) {
+                showLoading(false);
+                showError("Login failed: " + error);
+            }
+        });
     }
 
     private boolean validateInputs(String userInput, String password) {
         boolean valid = true;
 
         if (TextUtils.isEmpty(userInput)) {
-            tilEmail.setError(isAdminMode ? "Email is required" : "Employee ID or Email is required");
+            tilEmail.setError("Email is required");
             valid = false;
-        } else if (isAdminMode && !Patterns.EMAIL_ADDRESS.matcher(userInput).matches()) {
+        } else if (!Patterns.EMAIL_ADDRESS.matcher(userInput).matches()) {
             tilEmail.setError("Please enter a valid email address");
             valid = false;
         }
@@ -225,13 +182,10 @@ public class LoginActivity extends AppCompatActivity {
         if ("admin".equals(role)) {
             intent = new Intent(this, MainActivity.class);
             intent.putExtra("role", "admin");
-        } else if ("employee".equals(role)) {
+        } else {
             intent = new Intent(this, EmployeeProfileActivity.class);
             intent.putExtra("role", "employee");
             intent.putExtra("employeeId", empId);
-        } else {
-            showError("Unknown user role");
-            return;
         }
 
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
