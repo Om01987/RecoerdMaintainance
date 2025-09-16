@@ -9,213 +9,191 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.SignInButton;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.tasks.Task;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
 public class LoginActivity extends AppCompatActivity {
-
     private static final String TAG = "LoginActivity";
-
-    // Views
     private TextInputLayout tilEmail, tilPassword;
     private TextInputEditText etEmail, etPassword;
     private TextView tvRoleHeader, tvForgot;
     private MaterialButton btnLogin;
+    private SignInButton btnGoogle;
     private LinearProgressIndicator progress;
 
-    // Data
     private AuthRepository authRepository;
-
-    // Flavor-locked flag (set in build.gradle flavors)
+    private GoogleSignInClient googleClient;
     private final boolean isAdminMode = BuildConfig.IS_ADMIN;
+
+    private final ActivityResultLauncher<Intent> googleLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(), result -> {
+                        if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                            handleGoogleSignIn(result.getData());
+                        }
+                    });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
-        // 1) Init views BEFORE any showLoading
-        initializeViews();
-
-        // 2) Init repository
-        authRepository = new AuthRepository(this);
-
-        // 3) If already signed in, show loader and fetch role
-        if (authRepository.isUserSignedIn()) {
-            showLoading(true);
-            getCurrentUserRoleAndRedirect();
-        }
-
-        // 4) Normal UI setup
-        setupClickListeners();
-        updateUIForRole();
-    }
-
-    private void getCurrentUserRoleAndRedirect() {
-        String currentUid = authRepository.getCurrentUserUid();
-        if (currentUid != null) {
-            // Loader already shown in onCreate for auto-login path
-            authRepository.getUserRole(currentUid, new AuthRepository.RoleCallback() {
-                @Override
-                public void onRoleRetrieved(String role, String empId) {
-                    showLoading(false);
-                    redirectBasedOnRole(role, empId);
-                }
-
-                @Override
-                public void onError(String error) {
-                    showLoading(false);
-                    authRepository.signOut();
-                    Log.e(TAG, "Failed to get user role: " + error);
-                    Toast.makeText(LoginActivity.this, "Please sign in again", Toast.LENGTH_SHORT).show();
-                }
-            });
-        } else {
-            showLoading(false);
-        }
-    }
-
-    private void initializeViews() {
         tilEmail = findViewById(R.id.tilEmail);
         tilPassword = findViewById(R.id.tilPassword);
         etEmail = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
         tvRoleHeader = findViewById(R.id.tvRoleHeader);
         btnLogin = findViewById(R.id.btnLogin);
+        btnGoogle = findViewById(R.id.btnGoogle);
         tvForgot = findViewById(R.id.tvForgot);
         progress = findViewById(R.id.progress);
-    }
 
-    private void setupClickListeners() {
-        btnLogin.setOnClickListener(v -> attemptLogin());
+        authRepository = new AuthRepository(this);
+        setupGoogleSignIn();
 
-        tvForgot.setOnClickListener(v -> {
-            Intent intent = new Intent(this, ForgotPasswordActivity.class);
-            startActivity(intent);
-        });
-
-        // No role switching in flavor-locked build
-    }
-
-    private void updateUIForRole() {
-        if (isAdminMode) {
-            tvRoleHeader.setText("🔐 Admin Login");
-            tilEmail.setHint("Admin Email");
-            etEmail.setInputType(
-                    android.text.InputType.TYPE_CLASS_TEXT |
-                            android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-            );
-        } else {
-            tvRoleHeader.setText("👤 Employee Login");
-            tilEmail.setHint("Employee Email");
-            etEmail.setInputType(
-                    android.text.InputType.TYPE_CLASS_TEXT |
-                            android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-            );
+        if (authRepository.isUserSignedIn()) {
+            showLoading(true);
+            getCurrentUserRoleAndRedirect();
         }
-        clearErrors();
+
+        btnLogin.setOnClickListener(v -> attemptLogin());
+        btnGoogle.setOnClickListener(v -> googleLauncher.launch(
+                googleClient.getSignInIntent()));
+        tvForgot.setOnClickListener(v -> startActivity(
+                new Intent(this, ForgotPasswordActivity.class)));
+
+        updateUIForRole();
     }
 
-    private void attemptLogin() {
-        clearErrors();
+    private void setupGoogleSignIn() {
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(
+                GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(getString(R.string.default_web_client_id))
+                .requestEmail()
+                .build();
+        googleClient = GoogleSignIn.getClient(this, gso);
+    }
 
-        String userInput = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
-        String password = etPassword.getText() != null ? etPassword.getText().toString() : "";
+    private void handleGoogleSignIn(@Nullable Intent data) {
+        Task<GoogleSignInAccount> task =
+                GoogleSignIn.getSignedInAccountFromIntent(data);
+        try {
+            GoogleSignInAccount acc = task.getResult(ApiException.class);
+            firebaseAuthWithGoogle(acc.getIdToken());
+        } catch (ApiException e) {
+            Log.e(TAG, "Google sign-in failed", e);
+            showError("Google sign-in failed");
+        }
+    }
 
-        if (!validateInputs(userInput, password)) return;
-
+    private void firebaseAuthWithGoogle(String idToken) {
         showLoading(true);
-
-        // Email-only sign-in for both flavors to avoid unauthenticated DB reads
-        authRepository.signIn(userInput, password, new AuthRepository.AuthCallback() {
-            @Override
-            public void onSuccess(String role, String empId) {
+        authRepository.signInWithGoogle(idToken, new AuthRepository.AuthCallback() {
+            @Override public void onSuccess(String role, String empId) {
                 showLoading(false);
                 redirectBasedOnRole(role, empId);
             }
+            @Override public void onError(String error) {
+                showLoading(false);
+                showError("Not a registered email");
+            }
+        });
+    }
 
-            @Override
-            public void onError(String error) {
+    private void attemptLogin() {
+        tilEmail.setError(null);
+        tilPassword.setError(null);
+        String email = etEmail.getText().toString().trim();
+        String pass = etPassword.getText().toString();
+        boolean valid = true;
+        if (TextUtils.isEmpty(email)) {
+            tilEmail.setError("Email required"); valid=false;
+        } else if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            tilEmail.setError("Invalid email"); valid=false;
+        }
+        if (TextUtils.isEmpty(pass)) {
+            tilPassword.setError("Password required"); valid=false;
+        }
+        if (!valid) return;
+
+        showLoading(true);
+        authRepository.signIn(email, pass, new AuthRepository.AuthCallback() {
+            @Override public void onSuccess(String role, String empId) {
+                showLoading(false);
+                redirectBasedOnRole(role, empId);
+            }
+            @Override public void onError(String error) {
                 showLoading(false);
                 showError("Login failed: " + error);
             }
         });
     }
 
-    private boolean validateInputs(String userInput, String password) {
-        boolean valid = true;
-
-        if (TextUtils.isEmpty(userInput)) {
-            tilEmail.setError("Email is required");
-            valid = false;
-        } else if (!Patterns.EMAIL_ADDRESS.matcher(userInput).matches()) {
-            tilEmail.setError("Please enter a valid email address");
-            valid = false;
-        }
-
-        if (TextUtils.isEmpty(password)) {
-            tilPassword.setError("Password is required");
-            valid = false;
-        }
-
-        return valid;
+    private void getCurrentUserRoleAndRedirect() {
+        String uid = authRepository.getCurrentUserUid();
+        if (uid != null) {
+            authRepository.getUserRole(uid, new AuthRepository.RoleCallback() {
+                @Override public void onRoleRetrieved(String role, String empId) {
+                    showLoading(false);
+                    redirectBasedOnRole(role, empId);
+                }
+                @Override public void onError(String error) {
+                    showLoading(false);
+                    authRepository.signOut();
+                    showError("Please sign in again");
+                }
+            });
+        } else showLoading(false);
     }
 
     private void redirectBasedOnRole(String role, String empId) {
-        // Enforce flavor-based access control
-        if (isAdminMode && !"admin".equals(role)) {
+        boolean unauthorized = isAdminMode
+                ? !"admin".equals(role)
+                : !"employee".equals(role);
+        if (unauthorized) {
             authRepository.signOut();
-            showError("Access denied: Admin app accepts only admin accounts");
+            showError("Access denied");
             return;
         }
-        if (!isAdminMode && !"employee".equals(role)) {
-            authRepository.signOut();
-            showError("Access denied: Employee app accepts only employee accounts");
-            return;
-        }
-
-        Intent intent;
-        if ("admin".equals(role)) {
-            intent = new Intent(this, MainActivity.class);
-            intent.putExtra("role", "admin");
-        } else {
-            intent = new Intent(this, EmployeeProfileActivity.class);
-            intent.putExtra("role", "employee");
-            intent.putExtra("employeeId", empId);
-        }
-
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(intent);
+        Intent i = new Intent(this,
+                isAdminMode ? MainActivity.class : EmployeeProfileActivity.class);
+        i.putExtra("employeeId", empId);
+        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
+                Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(i);
         finish();
     }
 
-    // Null-safe loading toggles to prevent early-call crashes
+    private void updateUIForRole() {
+        tvRoleHeader.setText(isAdminMode
+                ? "🔐 Admin Login" : "👤 Employee Login");
+        tilEmail.setHint(isAdminMode?"Admin Email":"Employee Email");
+        btnGoogle.setVisibility(isAdminMode?View.GONE:View.VISIBLE);
+        tvForgot.setVisibility(isAdminMode?View.GONE:View.VISIBLE);
+    }
+
     private void showLoading(boolean loading) {
-        if (progress != null) progress.setVisibility(loading ? View.VISIBLE : View.GONE);
+        if (progress != null) progress.setVisibility(loading?View.VISIBLE:View.GONE);
         if (btnLogin != null) btnLogin.setEnabled(!loading);
-        if (etEmail != null) etEmail.setEnabled(!loading);
-        if (etPassword != null) etPassword.setEnabled(!loading);
-        if (tvForgot != null) tvForgot.setEnabled(!loading);
-        if (btnLogin != null) btnLogin.setText(loading ? "Signing in..." : "Log In");
+        if (btnGoogle != null) btnGoogle.setEnabled(!loading);
     }
 
-    private void showError(String message) {
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-        Log.e(TAG, message);
-    }
-
-    private void clearErrors() {
-        tilEmail.setError(null);
-        tilPassword.setError(null);
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (authRepository != null) authRepository.close();
-        super.onDestroy();
+    private void showError(String msg) {
+        Toast.makeText(this,msg,Toast.LENGTH_LONG).show();
+        Log.e(TAG,msg);
     }
 }

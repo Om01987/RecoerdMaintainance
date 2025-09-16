@@ -13,7 +13,20 @@
           "package_name": "com.example.recordmaintenance"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "267670926377-41bgdjklbv5oed69rkfftetl01v5fq2o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.recordmaintenance",
+            "certificate_hash": "15265c2f4475150f893c7f405c2773ca899db3e6"
+          }
+        },
+        {
+          "client_id": "267670926377-vaubpai1fojppqlt5u3rpv48pe58tiva.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAGu7G137mJBdFZYR51PPwM2u4WKeMFkeg"
@@ -21,7 +34,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "267670926377-vaubpai1fojppqlt5u3rpv48pe58tiva.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     },
@@ -32,7 +50,20 @@
           "package_name": "com.example.recordmaintenance.admin"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "267670926377-nqd89kjadm8g1gbonemqt2khqele4ub9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.recordmaintenance.admin",
+            "certificate_hash": "15265c2f4475150f893c7f405c2773ca899db3e6"
+          }
+        },
+        {
+          "client_id": "267670926377-vaubpai1fojppqlt5u3rpv48pe58tiva.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAGu7G137mJBdFZYR51PPwM2u4WKeMFkeg"
@@ -40,7 +71,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "267670926377-vaubpai1fojppqlt5u3rpv48pe58tiva.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

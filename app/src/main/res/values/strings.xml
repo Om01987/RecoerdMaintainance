@@ -1,3 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">RecordMaintenance</string>
+    <string name="app_name">Record Maintenance</string>
+    <string name="default_web_client_id" translatable="false">
+        267670926377-vaubpai1fojppqlt5u3rpv48pe58tiva.apps.googleusercontent.com
+    </string>
 </resources>

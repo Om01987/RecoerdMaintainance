@@ -27,13 +27,12 @@
         android:orientation="vertical"
         android:background="@drawable/bg_card"
         android:padding="24dp"
+        android:layout_margin="24dp"
+        android:layout_marginTop="40dp"
         app:layout_constraintTop_toBottomOf="@id/tvTitle"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_margin="24dp"
-        android:layout_marginTop="40dp">
+        app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Fixed Role Header (no clicking, set by build variant) -->
         <TextView
             android:id="@+id/tvRoleHeader"
             android:layout_width="match_parent"
@@ -43,17 +42,13 @@
             android:textColor="?attr/colorPrimary"
             android:textSize="20sp"
             android:textStyle="bold"
-            android:text="🔐 Admin Login"
-            android:padding="8dp"
-            android:clickable="false"
-            android:focusable="false"/>
+            android:padding="8dp"/>
 
-        <!-- Email/User Input Field -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/tilEmail"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Admin Email"
+            android:hint="Email"
             app:startIconDrawable="@android:drawable/ic_dialog_email"
             app:boxStrokeColor="?attr/colorPrimary"
             app:boxBackgroundMode="outline"
@@ -66,7 +61,6 @@
                 android:inputType="textEmailAddress"/>
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Password Field -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/tilPassword"
             android:layout_width="match_parent"
@@ -76,7 +70,7 @@
             app:startIconDrawable="@android:drawable/ic_lock_lock"
             app:boxStrokeColor="?attr/colorPrimary"
             app:boxBackgroundMode="outline"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="16dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etPassword"
@@ -85,7 +79,22 @@
                 android:inputType="textPassword"/>
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Forgot Password Link -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnLogin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Log In"
+            app:cornerRadius="16dp"
+            app:backgroundTint="?attr/colorPrimary"
+            android:textColor="@android:color/white"
+            android:layout_marginBottom="16dp"/>
+
+        <com.google.android.gms.common.SignInButton
+            android:id="@+id/btnGoogle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"/>
+
         <TextView
             android:id="@+id/tvForgot"
             android:layout_width="wrap_content"
@@ -93,60 +102,37 @@
             android:text="Forgot password?"
             android:textColor="?attr/colorPrimary"
             android:textStyle="bold"
-            android:layout_marginBottom="24dp"
-            android:background="?attr/selectableItemBackground"
-            android:padding="8dp"
-            android:clickable="true"
-            android:focusable="true"/>
+            android:layout_marginBottom="24dp"/>
 
-        <!-- Login Button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnLogin"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Log In"
-            android:textAllCaps="false"
-            android:padding="16dp"
-            app:cornerRadius="16dp"
-            app:backgroundTint="?attr/colorPrimary"
-            android:textColor="@android:color/white"
-            android:textSize="16sp"/>
-
-        <!-- Progress Indicator -->
         <com.google.android.material.progressindicator.LinearProgressIndicator
             android:id="@+id/progress"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:visibility="gone"
-            android:indeterminate="true"
-            android:layout_marginTop="16dp"
-            android:contentDescription="Signing in, please wait"/>
+            android:indeterminate="true"/>
 
-        <!-- App Version Info (flavor-based) -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="This is a dedicated app for your role"
+            android:text="Dedicated app for your role"
             android:textSize="12sp"
-            android:textColor="#888888"
+            android:textColor="#888"
             android:gravity="center"
             android:layout_marginTop="16dp"
-            android:padding="8dp"
             android:textStyle="italic"/>
 
     </LinearLayout>
 
-    <!-- Footer -->
     <TextView
         android:id="@+id/tvFooter"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="All rights reserved @matraSoftech ."
+        android:text="© MatraSoftech"
         android:textColor="#B3FFFFFF"
         android:gravity="center"
+        android:layout_marginBottom="32dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginBottom="32dp"/>
+        app:layout_constraintEnd_toEndOf="parent"/>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

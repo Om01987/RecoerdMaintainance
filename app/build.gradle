@@ -95,6 +95,7 @@ dependencies {
     androidTestImplementation libs.espresso.core
 
     implementation libs.firebase.auth
+    implementation 'com.google.android.gms:play-services-auth:21.2.0'
     implementation libs.firebase.firestore
     implementation libs.firebase.storage
 }

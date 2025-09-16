@@ -1,8 +1,11 @@
 package com.example.recordmaintenance;
 
 import android.content.Context;
+import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
@@ -36,7 +39,6 @@ public class AuthRepository {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
-                            // Get user role from database
                             getUserRole(user.getUid(), new RoleCallback() {
                                 @Override
                                 public void onRoleRetrieved(String role, String empId) {
@@ -60,30 +62,50 @@ public class AuthRepository {
     }
 
     /**
+     * Sign in user with Google ID token
+     */
+    public void signInWithGoogle(String idToken, AuthCallback callback) {
+        AuthCredential cred = GoogleAuthProvider.getCredential(idToken, null);
+        mAuth.signInWithCredential(cred)
+                .addOnSuccessListener(authResult -> {
+                    FirebaseUser user = authResult.getUser();
+                    if (user != null) {
+                        getUserRole(user.getUid(), new RoleCallback() {
+                            @Override
+                            public void onRoleRetrieved(String role, String empId) {
+                                callback.onSuccess(role, empId);
+                            }
+
+                            @Override
+                            public void onError(String error) {
+                                callback.onError("Failed to get user role: " + error);
+                            }
+                        });
+                    } else {
+                        callback.onError("Google authentication failed");
+                    }
+                })
+                .addOnFailureListener(e -> callback.onError(e.getMessage()));
+    }
+
+    /**
      * Get user role from database - Public method for LoginActivity
      */
     public void getUserRole(String uid, RoleCallback callback) {
-        mDatabase.child("users").child(uid).addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                if (dataSnapshot.exists()) {
-                    String role = dataSnapshot.child("role").getValue(String.class);
-                    String empId = dataSnapshot.child("empId").getValue(String.class);
-                    if (role != null) {
-                        callback.onRoleRetrieved(role, empId);
-                    } else {
-                        callback.onError("User role not found");
+        mDatabase.child("users").child(uid)
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override public void onDataChange(@NonNull DataSnapshot ds) {
+                        if (ds.exists()) {
+                            String role = ds.child("role").getValue(String.class);
+                            String empId = ds.child("empId").getValue(String.class);
+                            if (role != null) callback.onRoleRetrieved(role, empId);
+                            else callback.onError("User role not found");
+                        } else callback.onError("User data not found in database");
                     }
-                } else {
-                    callback.onError("User data not found in database");
-                }
-            }
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError databaseError) {
-                callback.onError(databaseError.getMessage());
-            }
-        });
+                    @Override public void onCancelled(@NonNull DatabaseError e) {
+                        callback.onError(e.getMessage());
+                    }
+                });
     }
 
     /**
@@ -92,13 +114,9 @@ public class AuthRepository {
     public void sendPasswordResetEmail(String email, ResetCallback callback) {
         mAuth.sendPasswordResetEmail(email)
                 .addOnCompleteListener(task -> {
-                    if (task.isSuccessful()) {
-                        callback.onSuccess("Password reset email sent to " + email);
-                    } else {
-                        String errorMsg = task.getException() != null ?
-                                task.getException().getMessage() : "Failed to send reset email";
-                        callback.onError(errorMsg);
-                    }
+                    if (task.isSuccessful()) callback.onSuccess("Password reset email sent to " + email);
+                    else callback.onError(task.getException()!=null?
+                            task.getException().getMessage():"Failed to send reset email");
                 });
     }
 
@@ -110,17 +128,11 @@ public class AuthRepository {
         if (user != null) {
             user.updatePassword(newPassword)
                     .addOnCompleteListener(task -> {
-                        if (task.isSuccessful()) {
-                            callback.onSuccess("Password updated successfully");
-                        } else {
-                            String errorMsg = task.getException() != null ?
-                                    task.getException().getMessage() : "Failed to update password";
-                            callback.onError(errorMsg);
-                        }
+                        if (task.isSuccessful()) callback.onSuccess("Password updated successfully");
+                        else callback.onError(task.getException()!=null?
+                                task.getException().getMessage():"Failed to update password");
                     });
-        } else {
-            callback.onError("User not authenticated");
-        }
+        } else callback.onError("User not authenticated");
     }
 
     /**
@@ -128,82 +140,26 @@ public class AuthRepository {
      */
     public void reauthenticateUser(String currentPassword, ReauthCallback callback) {
         FirebaseUser user = mAuth.getCurrentUser();
-        if (user != null && user.getEmail() != null) {
-            com.google.firebase.auth.AuthCredential credential =
-                    com.google.firebase.auth.EmailAuthProvider.getCredential(user.getEmail(), currentPassword);
-
-            user.reauthenticate(credential)
+        if (user != null && user.getEmail()!=null) {
+            AuthCredential cred = EmailAuthProvider.getCredential(user.getEmail(), currentPassword);
+            user.reauthenticate(cred)
                     .addOnCompleteListener(task -> {
-                        if (task.isSuccessful()) {
-                            callback.onSuccess();
-                        } else {
-                            String errorMsg = task.getException() != null ?
-                                    task.getException().getMessage() : "Re-authentication failed";
-                            callback.onError(errorMsg);
-                        }
+                        if (task.isSuccessful()) callback.onSuccess();
+                        else callback.onError(task.getException()!=null?
+                                task.getException().getMessage():"Re-authentication failed");
                     });
-        } else {
-            callback.onError("User not authenticated");
-        }
+        } else callback.onError("User not authenticated");
     }
 
-    /**
-     * Sign out current user
-     */
-    public void signOut() {
-        mAuth.signOut();
-    }
+    public void signOut() { mAuth.signOut(); }
+    public FirebaseUser getCurrentUser() { return mAuth.getCurrentUser(); }
+    public boolean isUserSignedIn() { return mAuth.getCurrentUser()!=null; }
+    public String getCurrentUserUid() { return (mAuth.getCurrentUser()!=null)?mAuth.getCurrentUser().getUid():null; }
 
-    /**
-     * Get current user
-     */
-    public FirebaseUser getCurrentUser() {
-        return mAuth.getCurrentUser();
-    }
-
-    /**
-     * Check if user is signed in
-     */
-    public boolean isUserSignedIn() {
-        return mAuth.getCurrentUser() != null;
-    }
-
-    /**
-     * Get current user UID
-     */
-    public String getCurrentUserUid() {
-        FirebaseUser user = mAuth.getCurrentUser();
-        return user != null ? user.getUid() : null;
-    }
-
-    // Callback interfaces
-    public interface AuthCallback {
-        void onSuccess(String role, String empId);
-        void onError(String error);
-    }
-
-    public interface RoleCallback {
-        void onRoleRetrieved(String role, String empId);
-        void onError(String error);
-    }
-
-    public interface ResetCallback {
-        void onSuccess(String message);
-        void onError(String error);
-    }
-
-    public interface UpdateCallback {
-        void onSuccess(String message);
-        void onError(String error);
-    }
-
-    public interface ReauthCallback {
-        void onSuccess();
-        void onError(String error);
-    }
-
-    // Cleanup method (no SQLite to close)
-    public void close() {
-        // No resources to clean up for Firebase
-    }
+    public interface AuthCallback { void onSuccess(String role,String empId); void onError(String error);}
+    public interface RoleCallback { void onRoleRetrieved(String role,String empId); void onError(String error);}
+    public interface ResetCallback{ void onSuccess(String message); void onError(String error);}
+    public interface UpdateCallback{ void onSuccess(String message); void onError(String error);}
+    public interface ReauthCallback{ void onSuccess(); void onError(String error);}
+    public void close(){}
 }
