@@ -16,31 +16,21 @@ import com.google.android.material.textfield.TextInputLayout;
 
 public class ForgotPasswordActivity extends AppCompatActivity {
     private MaterialToolbar toolbar;
-    private TextInputLayout tilEmpId, tilEmpEmail, tilJoinedDate;
-    private TextInputEditText etEmpId, etEmpEmail, etJoinedDate;
-    private MaterialButton btnVerify;
+    private TextInputLayout tilEmail;
+    private TextInputEditText etEmail;
+    private MaterialButton btnSendReset;
     private LinearProgressIndicator progress;
-
     private AuthRepository authRepository;
-    private EmployeeRepository employeeRepository;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_forgot_password);
 
-        authRepository = new AuthRepository(this);
-        employeeRepository = new EmployeeRepository(this);
-        employeeRepository.open();
-
         toolbar = findViewById(R.id.toolbar);
-        tilEmpId = findViewById(R.id.tilEmpId);
-        etEmpId = findViewById(R.id.etEmpId);
-        tilEmpEmail = findViewById(R.id.tilEmpEmail);
-        etEmpEmail = findViewById(R.id.etEmpEmail);
-        tilJoinedDate = findViewById(R.id.tilJoinedDate);
-        etJoinedDate = findViewById(R.id.etJoinedDate);
-        btnVerify = findViewById(R.id.btnVerify);
+        tilEmail = findViewById(R.id.tilEmail);
+        etEmail = findViewById(R.id.etEmail);
+        btnSendReset = findViewById(R.id.btnSendReset);
         progress = findViewById(R.id.progress);
 
         setSupportActionBar(toolbar);
@@ -49,64 +39,44 @@ public class ForgotPasswordActivity extends AppCompatActivity {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
 
-        btnVerify.setOnClickListener(v -> attemptEmployeeVerify());
+        authRepository = new AuthRepository(this);
+
+        btnSendReset.setOnClickListener(v -> attemptPasswordReset());
     }
 
-    private void attemptEmployeeVerify() {
-        tilEmpId.setError(null);
-        tilEmpEmail.setError(null);
-        tilJoinedDate.setError(null);
+    private void attemptPasswordReset() {
+        tilEmail.setError(null);
+        String email = etEmail.getText().toString().trim();
 
-        String id = etEmpId.getText().toString().trim();
-        String email = etEmpEmail.getText().toString().trim();
-        String date = etJoinedDate.getText().toString().trim();
-
-        boolean valid = true;
-        if (TextUtils.isEmpty(id)) {
-            tilEmpId.setError("Employee ID required");
-            valid = false;
-        }
         if (TextUtils.isEmpty(email) || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            tilEmpEmail.setError("Valid email required");
-            valid = false;
+            tilEmail.setError("Please enter a valid email address");
+            return;
         }
-        if (TextUtils.isEmpty(date)) {
-            tilJoinedDate.setError("Joined date required");
-            valid = false;
-        }
-        if (!valid) return;
 
         progress.setVisibility(View.VISIBLE);
-        employeeRepository.getEmployeeByEmpId(id, new EmployeeRepository.EmployeeCallback() {
+        btnSendReset.setEnabled(false);
+
+        authRepository.sendPasswordResetEmail(email, new AuthRepository.ResetCallback() {
             @Override
-            public void onSuccess(Employee employee) {
+            public void onSuccess(String message) {
                 progress.setVisibility(View.GONE);
-                if (employee.getEmpEmail().equalsIgnoreCase(email)
-                        && employee.getJoinedDate().equals(date)) {
-                    authRepository.sendPasswordResetEmail(email, new AuthRepository.ResetCallback() {
-                        @Override public void onSuccess(String message) {
-                            new AlertDialog.Builder(ForgotPasswordActivity.this)
-                                    .setTitle("Reset Email Sent")
-                                    .setMessage("A reset link was sent to\n" + email)
-                                    .setPositiveButton("OK", (d,w)-> finish())
-                                    .show();
-                        }
-                        @Override public void onError(String error) {
-                            Toast.makeText(ForgotPasswordActivity.this,
-                                    "Failed to send reset email: " + error,
-                                    Toast.LENGTH_LONG).show();
-                        }
-                    });
-                } else {
-                    Toast.makeText(ForgotPasswordActivity.this,
-                            "Verification failed. Check details.",
-                            Toast.LENGTH_LONG).show();
-                }
+                btnSendReset.setEnabled(true);
+                new AlertDialog.Builder(ForgotPasswordActivity.this)
+                        .setTitle("Reset Email Sent")
+                        .setMessage("If an account exists for:\n" + email +
+                                "\n\nYou will receive a reset link shortly. Please check your inbox and spam folder.")
+                        .setPositiveButton("OK", (d, w) -> finish())
+                        .setCancelable(false)
+                        .show();
             }
-            @Override public void onError(String error) {
+
+            @Override
+            public void onError(String error) {
                 progress.setVisibility(View.GONE);
+                btnSendReset.setEnabled(true);
                 Toast.makeText(ForgotPasswordActivity.this,
-                        "Employee not found", Toast.LENGTH_LONG).show();
+                        "Failed to send reset email: " + error,
+                        Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -122,7 +92,7 @@ public class ForgotPasswordActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        if (employeeRepository != null) employeeRepository.close();
+        if (authRepository != null) authRepository.close();
         super.onDestroy();
     }
 }

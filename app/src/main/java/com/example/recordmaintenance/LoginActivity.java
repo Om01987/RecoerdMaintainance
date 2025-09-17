@@ -71,8 +71,13 @@ public class LoginActivity extends AppCompatActivity {
         }
 
         btnLogin.setOnClickListener(v -> attemptLogin());
-        btnGoogle.setOnClickListener(v -> googleLauncher.launch(
-                googleClient.getSignInIntent()));
+        btnGoogle.setOnClickListener(v -> {
+            // Sign out from Google first to force account selection
+            googleClient.signOut().addOnCompleteListener(this, task -> {
+                Intent signInIntent = googleClient.getSignInIntent();
+                googleLauncher.launch(signInIntent);
+            });
+        });
         tvForgot.setOnClickListener(v -> startActivity(
                 new Intent(this, ForgotPasswordActivity.class)));
 
@@ -103,11 +108,13 @@ public class LoginActivity extends AppCompatActivity {
     private void firebaseAuthWithGoogle(String idToken) {
         showLoading(true);
         authRepository.signInWithGoogle(idToken, new AuthRepository.AuthCallback() {
-            @Override public void onSuccess(String role, String empId) {
+            @Override
+            public void onSuccess(String role, String empId) {
                 showLoading(false);
                 redirectBasedOnRole(role, empId);
             }
-            @Override public void onError(String error) {
+            @Override
+            public void onError(String error) {
                 showLoading(false);
                 showError("Not a registered email");
             }
@@ -120,23 +127,31 @@ public class LoginActivity extends AppCompatActivity {
         String email = etEmail.getText().toString().trim();
         String pass = etPassword.getText().toString();
         boolean valid = true;
+
         if (TextUtils.isEmpty(email)) {
-            tilEmail.setError("Email required"); valid=false;
+            tilEmail.setError("Email required");
+            valid = false;
         } else if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            tilEmail.setError("Invalid email"); valid=false;
+            tilEmail.setError("Invalid email");
+            valid = false;
         }
+
         if (TextUtils.isEmpty(pass)) {
-            tilPassword.setError("Password required"); valid=false;
+            tilPassword.setError("Password required");
+            valid = false;
         }
+
         if (!valid) return;
 
         showLoading(true);
         authRepository.signIn(email, pass, new AuthRepository.AuthCallback() {
-            @Override public void onSuccess(String role, String empId) {
+            @Override
+            public void onSuccess(String role, String empId) {
                 showLoading(false);
                 redirectBasedOnRole(role, empId);
             }
-            @Override public void onError(String error) {
+            @Override
+            public void onError(String error) {
                 showLoading(false);
                 showError("Login failed: " + error);
             }
@@ -147,17 +162,21 @@ public class LoginActivity extends AppCompatActivity {
         String uid = authRepository.getCurrentUserUid();
         if (uid != null) {
             authRepository.getUserRole(uid, new AuthRepository.RoleCallback() {
-                @Override public void onRoleRetrieved(String role, String empId) {
+                @Override
+                public void onRoleRetrieved(String role, String empId) {
                     showLoading(false);
                     redirectBasedOnRole(role, empId);
                 }
-                @Override public void onError(String error) {
+                @Override
+                public void onError(String error) {
                     showLoading(false);
                     authRepository.signOut();
                     showError("Please sign in again");
                 }
             });
-        } else showLoading(false);
+        } else {
+            showLoading(false);
+        }
     }
 
     private void redirectBasedOnRole(String role, String empId) {
@@ -169,11 +188,11 @@ public class LoginActivity extends AppCompatActivity {
             showError("Access denied");
             return;
         }
+
         Intent i = new Intent(this,
                 isAdminMode ? MainActivity.class : EmployeeProfileActivity.class);
         i.putExtra("employeeId", empId);
-        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
-                Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(i);
         finish();
     }
@@ -181,19 +200,25 @@ public class LoginActivity extends AppCompatActivity {
     private void updateUIForRole() {
         tvRoleHeader.setText(isAdminMode
                 ? "🔐 Admin Login" : "👤 Employee Login");
-        tilEmail.setHint(isAdminMode?"Admin Email":"Employee Email");
-        btnGoogle.setVisibility(isAdminMode?View.GONE:View.VISIBLE);
-        tvForgot.setVisibility(isAdminMode?View.GONE:View.VISIBLE);
+        tilEmail.setHint(isAdminMode ? "Admin Email" : "Employee Email");
+        btnGoogle.setVisibility(isAdminMode ? View.GONE : View.VISIBLE);
+        tvForgot.setVisibility(isAdminMode ? View.GONE : View.VISIBLE);
     }
 
     private void showLoading(boolean loading) {
-        if (progress != null) progress.setVisibility(loading?View.VISIBLE:View.GONE);
-        if (btnLogin != null) btnLogin.setEnabled(!loading);
-        if (btnGoogle != null) btnGoogle.setEnabled(!loading);
+        if (progress != null) {
+            progress.setVisibility(loading ? View.VISIBLE : View.GONE);
+        }
+        if (btnLogin != null) {
+            btnLogin.setEnabled(!loading);
+        }
+        if (btnGoogle != null) {
+            btnGoogle.setEnabled(!loading);
+        }
     }
 
     private void showError(String msg) {
-        Toast.makeText(this,msg,Toast.LENGTH_LONG).show();
-        Log.e(TAG,msg);
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+        Log.e(TAG, msg);
     }
 }
